@@ -1,0 +1,7 @@
+*.pbf
+*.osm
+*.geojson
+*.gpkg
+*.shp
+*.db
+data/

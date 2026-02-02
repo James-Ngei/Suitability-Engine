@@ -1,0 +1,9 @@
+rasterio
+numpy
+scipy
+fastapi
+uvicorn
+geopandas
+shapely
+matplotlib
+pillow
