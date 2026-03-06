@@ -305,7 +305,7 @@ def main():
         return
     
     # Constraint layers
-    constraint_dir = Path.home() / 'suitability-engine' / 'data' / 'raw' / 'constraints'
+    constraint_dir = Path.home() / 'suitability-engine' / 'data' / 'preprocessed'
     constraints = [
         constraint_dir / 'bungoma_protected.tif'
     ]

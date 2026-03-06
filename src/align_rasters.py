@@ -244,15 +244,15 @@ def main():
     from pathlib import Path
     
     # Define input rasters
-    data_dir = Path.home() / 'suitability-engine' / 'data' / 'raw'
+    data_dir = Path.home() / 'suitability-engine' / 'data' / 'preprocessed'
     
     rasters = {
-        'elevation': data_dir / 'elevation' / 'bungoma_elevation.tif',
-        'rainfall': data_dir / 'rainfall' / 'bungoma_rainfall.tif',
-        'temperature': data_dir / 'temperature' / 'bungoma_temperature.tif',
-        'soil': data_dir / 'soil' / 'bungoma_soil_drainage.tif',
-        'slope': data_dir / 'constraints' / 'bungoma_slope.tif',
-        'protected': data_dir / 'constraints' / 'bungoma_protected.tif'
+        'elevation': data_dir / 'bungoma_elevation.tif',
+        'rainfall': data_dir / 'bungoma_rainfall.tif',
+        'temperature': data_dir / 'bungoma_temperature.tif',
+        'soil': data_dir / 'bungoma_soil.tif',
+        'slope': data_dir / 'bungoma_slope.tif',
+        'protected': data_dir / 'bungoma_protected.tif'
     }
     
     # Check all files exist

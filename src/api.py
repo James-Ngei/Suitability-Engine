@@ -28,7 +28,7 @@ app = FastAPI(
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, specify your frontend domain
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -303,7 +303,7 @@ async def get_geojson(
         # Find suitable pixels
         suitable_mask = suitability >= threshold
         
-        # Convert to features (simplified - returns pixel centers)
+        # Convert to features
         features = []
         rows, cols = np.where(suitable_mask)
         
