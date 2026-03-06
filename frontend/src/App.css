@@ -8,93 +8,126 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   background: #f5f7fa;
   color: #333;
+  /* Lock the page to the viewport — no page-level scrolling */
+  height: 100vh;
+  overflow: hidden;
 }
 
 .App {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-/* Header */
+/* ── Header ────────────────────────────────────────────────────────────────── */
 .header {
   background: linear-gradient(135deg, #2c5f2d 0%, #4a8f4d 100%);
   color: white;
-  padding: 1.5rem 2rem;
+  padding: 1rem 2rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  flex-shrink: 0;   /* never shrink — always visible */
 }
 
 .header h1 {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
+  font-size: 1.6rem;
+  margin-bottom: 0.2rem;
 }
 
 .header p {
   opacity: 0.9;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
-/* Container */
+/* ── Container ─────────────────────────────────────────────────────────────── */
 .container {
   display: flex;
-  flex: 1;
+  flex: 1;             /* fill remaining vertical space */
   gap: 1.5rem;
   padding: 1.5rem;
-  max-width: 1800px;
-  margin: 0 auto;
-  width: 100%;
+  overflow: hidden;    /* children handle their own overflow */
+  min-height: 0;       /* critical: allows flex children to shrink below content size */
 }
 
-/* Sidebar */
+/* ── Sidebar ───────────────────────────────────────────────────────────────── */
 .sidebar {
-  width: 380px;
+  width: 340px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
+  overflow-y: auto;    /* only the sidebar scrolls */
+  overflow-x: hidden;
+  padding-right: 4px;  /* small gap so scrollbar doesn't clip content */
+  min-height: 0;
 }
 
+/* Thin scrollbar for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: #c8e6c9;
+  border-radius: 3px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #4a8f4d;
+}
+
+/* ── Weight controls ───────────────────────────────────────────────────────── */
 .weight-controls {
   background: white;
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  flex-shrink: 0;
 }
 
 .weight-controls h2 {
-  font-size: 1.25rem;
-  margin-bottom: 1rem;
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
   color: #2c5f2d;
 }
 
 .weight-item {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .weight-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
 }
 
 .criterion-name {
   font-weight: 600;
   color: #2c5f2d;
   text-transform: capitalize;
+  font-size: 0.95rem;
 }
 
 .weight-value {
   background: #e8f5e9;
-  padding: 0.25rem 0.75rem;
+  padding: 0.2rem 0.6rem;
   border-radius: 20px;
   font-weight: 600;
   color: #2c5f2d;
+  font-size: 0.9rem;
 }
 
 .weight-description {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #666;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.optimal-range {
+  font-size: 0.75rem;
+  color: #888;
 }
 
 .weight-slider {
@@ -104,13 +137,14 @@ body {
   background: #ddd;
   outline: none;
   -webkit-appearance: none;
+  cursor: pointer;
 }
 
 .weight-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #4a8f4d;
   cursor: pointer;
@@ -123,20 +157,29 @@ body {
 }
 
 .weight-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: #4a8f4d;
   cursor: pointer;
   border: none;
 }
 
-/* Controls Section */
+.total-weight {
+  font-size: 0.85rem;
+  text-align: right;
+  color: #666;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ── Controls section ──────────────────────────────────────────────────────── */
 .controls-section {
   background: white;
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  flex-shrink: 0;
 }
 
 .checkbox-label {
@@ -145,18 +188,18 @@ body {
   gap: 0.5rem;
   margin-bottom: 1rem;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 .checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   cursor: pointer;
 }
 
 .analyze-button {
   width: 100%;
-  padding: 1rem;
+  padding: 0.9rem;
   background: linear-gradient(135deg, #4a8f4d 0%, #2c5f2d 100%);
   color: white;
   border: none;
@@ -165,7 +208,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.6rem;
 }
 
 .analyze-button:hover:not(:disabled) {
@@ -180,12 +223,12 @@ body {
 
 .reset-button {
   width: 100%;
-  padding: 0.75rem;
+  padding: 0.65rem;
   background: white;
   color: #666;
   border: 2px solid #ddd;
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -196,16 +239,17 @@ body {
   color: #4a8f4d;
 }
 
-/* Statistics */
+/* ── Statistics ────────────────────────────────────────────────────────────── */
 .statistics {
   background: white;
   border-radius: 12px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  flex-shrink: 0;
 }
 
 .statistics h3 {
-  font-size: 1.1rem;
+  font-size: 1rem;
   margin-bottom: 1rem;
   color: #2c5f2d;
 }
@@ -213,7 +257,7 @@ body {
 .stat-item {
   display: flex;
   justify-content: space-between;
-  padding: 0.75rem 0;
+  padding: 0.6rem 0;
   border-bottom: 1px solid #f0f0f0;
 }
 
@@ -223,33 +267,34 @@ body {
 
 .stat-label {
   color: #666;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .stat-value {
   font-weight: 600;
   color: #2c5f2d;
+  font-size: 0.85rem;
 }
 
 .classification {
-  margin-top: 1rem;
-  padding-top: 1rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
   border-top: 2px solid #f0f0f0;
 }
 
 .class-bar {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.6rem;
 }
 
 .class-label {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.25rem;
-  font-size: 0.85rem;
+  margin-bottom: 0.2rem;
+  font-size: 0.8rem;
 }
 
 .class-progress {
-  height: 8px;
+  height: 7px;
   background: #f0f0f0;
   border-radius: 4px;
   overflow: hidden;
@@ -260,23 +305,25 @@ body {
   transition: width 0.5s ease;
 }
 
-.highly-suitable { background: #2e7d32; }
-.moderately-suitable { background: #66bb6a; }
-.marginally-suitable { background: #ffa726; }
-.not-suitable { background: #ef5350; }
+.highly-suitable      { background: #2e7d32; }
+.moderately-suitable  { background: #66bb6a; }
+.marginally-suitable  { background: #ffa726; }
+.not-suitable         { background: #ef5350; }
 
-/* Main Content */
+/* ── Map panel ─────────────────────────────────────────────────────────────── */
 .main-content {
   flex: 1;
   background: white;
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  min-height: 0;       /* critical: lets the map fill exactly the available space */
+  min-width: 0;
 }
 
 .map-container {
-  height: 100%;
-  min-height: 600px;
+  height: 100%;        /* fill the entire .main-content panel */
+  width: 100%;
   position: relative;
 }
 
@@ -289,32 +336,43 @@ body {
   font-size: 1.1rem;
 }
 
-/* Footer */
+/* ── Footer ────────────────────────────────────────────────────────────────── */
 .footer {
   background: #2c5f2d;
   color: white;
   text-align: center;
-  padding: 1rem;
-  font-size: 0.9rem;
+  padding: 0.6rem;
+  font-size: 0.85rem;
   opacity: 0.9;
+  flex-shrink: 0;
 }
 
-/* Responsive */
+/* ── Responsive ────────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
+  body {
+    overflow: auto;   /* allow scrolling on small screens */
+    height: auto;
+  }
+  .App {
+    height: auto;
+    overflow: visible;
+  }
   .container {
     flex-direction: column;
+    overflow: visible;
   }
-  
   .sidebar {
     width: 100%;
+    overflow: visible;
+    max-height: none;
   }
-  
   .main-content {
     min-height: 500px;
+    height: 500px;
   }
 }
 
-/* Leaflet overrides */
+/* ── Leaflet overrides ─────────────────────────────────────────────────────── */
 .leaflet-container {
   height: 100%;
   width: 100%;
