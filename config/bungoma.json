@@ -1,0 +1,96 @@
+{
+  "county": "bungoma",
+  "display_name": "Bungoma County",
+  "country": "Kenya",
+  "crop": "Cotton",
+  "map_center": [
+    0.75,
+    34.65
+  ],
+  "map_zoom": 10,
+  "resolution": 0.01,
+  "layers": {
+    "elevation": "bungoma_elevation.tif",
+    "rainfall": "bungoma_rainfall.tif",
+    "temperature": "bungoma_temperature.tif",
+    "soil": "bungoma_soil.tif",
+    "slope": "bungoma_slope.tif"
+  },
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 1000,
+        "b": 1200,
+        "c": 1700,
+        "d": 2400
+      },
+      "description": "Highland cotton 1200-1700m optimal (Bungoma/Mt Elgon)"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 1200,
+        "b": 1400,
+        "c": 1800,
+        "d": 2200
+      },
+      "description": "High rainfall zone 1400-1800mm optimal"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 25,
+        "spread": 5
+      },
+      "description": "Cotton optimal 25C, tolerates 20-30C"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 150,
+        "b": 250,
+        "c": 380,
+        "d": 500
+      },
+      "description": "Clay content g/kg — moderate clay 250-380 optimal"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 15
+      },
+      "description": "Flat land best, zero above 15 degrees"
+    }
+  },
+  "weights": {
+    "rainfall": 0.25,
+    "elevation": 0.2,
+    "temperature": 0.2,
+    "soil": 0.2,
+    "slope": 0.15
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall in mm/year",
+      "optimal_range": "1400-1800 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level in metres",
+      "optimal_range": "1200-1700 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature in °C",
+      "optimal_range": "20-30°C (optimal 25°C)"
+    },
+    "soil": {
+      "description": "Soil clay content (SoilGrids g/kg)",
+      "optimal_range": "250-380 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope in degrees",
+      "optimal_range": "0-5° (max 15°)"
+    }
+  }
+}

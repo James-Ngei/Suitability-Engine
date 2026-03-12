@@ -1,16 +1,15 @@
 """
 clip_to_boundary.py
 --------------------
-Clips all normalized rasters AND the constraint mask to the exact
-Bungoma County polygon shape, replacing the bounding-box versions.
+Clips all normalized rasters to the county polygon boundary and regenerates
+the constraint mask. Reads all paths from the active county config.
 
-Run ONCE after normalization, before (re)starting the API:
+Run AFTER normalize.py:
     python src/clip_to_boundary.py
-
-Pipeline position:
-    preprocess → align → normalize → [THIS SCRIPT] → API
+    Then restart the API.
 """
 
+import sys
 import numpy as np
 import rasterio
 from rasterio.mask import mask as rio_mask
@@ -18,150 +17,123 @@ from rasterio.features import rasterize
 import geopandas as gpd
 from pathlib import Path
 
-
-# ── Paths ─────────────────────────────────────────────────────────────────────
-BASE_DIR       = Path.home() / 'suitability-engine'
-BOUNDARY_PATH  = BASE_DIR / 'data' / 'boundaries' / 'bungoma_boundary.gpkg'
-NORMALIZED_DIR = BASE_DIR / 'data' / 'normalized'
-CONSTRAINT_OUT = BASE_DIR / 'data' / 'preprocessed' / 'bungoma_constraints_mask.tif'
-
-LAYERS = ['elevation', 'rainfall', 'temperature', 'soil', 'slope']
-
-
-def load_boundary(boundary_path: Path, target_crs: str = 'EPSG:4326'):
-    """Load and reproject boundary to match raster CRS."""
-    gdf = gpd.read_file(boundary_path)
-    if str(gdf.crs) != target_crs:
-        gdf = gdf.to_crs(target_crs)
-    print(f"✅ Boundary loaded: {len(gdf)} feature(s), CRS={gdf.crs}")
-    return gdf
+sys.path.append(str(Path(__file__).parent))
+from config import load_config, create_county_dirs
 
 
 def clip_raster(input_path: Path, output_path: Path, shapes, nodata=0):
-    """
-    Clip a raster to polygon shapes using rasterio.mask.
-    Pixels outside the polygon are set to nodata (transparent on map).
-    """
+    """Clip raster to polygon shapes. Pixels outside become nodata."""
     with rasterio.open(input_path) as src:
-        # Reproject shapes to match raster CRS just in case
         out_image, out_transform = rio_mask(
-            src,
-            shapes,
-            crop=True,       # Crop to polygon extent
-            filled=True,     # Fill outside with nodata
-            nodata=nodata,
-            all_touched=False
+            src, shapes,
+            crop=True, filled=True, nodata=nodata, all_touched=False
         )
-
-        out_profile = src.profile.copy()
-        out_profile.update({
-            'height':    out_image.shape[1],
-            'width':     out_image.shape[2],
-            'transform': out_transform,
-            'nodata':    nodata,
-            'compress':  'lzw'
-        })
-
-        with rasterio.open(output_path, 'w', **out_profile) as dst:
+        profile = src.profile.copy()
+        profile.update(
+            height=out_image.shape[1], width=out_image.shape[2],
+            transform=out_transform, nodata=nodata, compress='lzw'
+        )
+        with rasterio.open(output_path, 'w', **profile) as dst:
             dst.write(out_image)
 
-    print(f"  ✅ Clipped → {output_path.name}  shape={out_image.shape[1:]}")
     return output_path
 
 
-def generate_constraint_mask(boundary_gdf, reference_path: Path, output_path: Path):
-    """
-    Rasterize the Bungoma boundary polygon as a binary mask:
-      1 = inside Bungoma (allowed)
-      0 = outside (excluded / nodata)
-
-    Uses the clipped normalized layer as the reference grid so
-    the mask is guaranteed to be the same shape.
-    """
+def generate_constraint_mask(boundary_gdf, reference_path: Path,
+                              output_path: Path):
+    """Rasterize boundary polygon as binary mask (1=inside, 0=outside)."""
     with rasterio.open(reference_path) as ref:
-        ref_transform = ref.transform
-        ref_crs       = ref.crs
-        ref_height    = ref.height
-        ref_width     = ref.width
+        transform = ref.transform
+        crs       = ref.crs
+        height    = ref.height
+        width     = ref.width
 
-    # Reproject boundary to raster CRS
-    gdf = boundary_gdf.to_crs(ref_crs)
+    gdf    = boundary_gdf.to_crs(crs)
     shapes = [(geom, 1) for geom in gdf.geometry]
 
     mask_arr = rasterize(
-        shapes,
-        out_shape=(ref_height, ref_width),
-        transform=ref_transform,
-        fill=0,          # outside = 0
-        dtype=np.uint8
+        shapes, out_shape=(height, width),
+        transform=transform, fill=0, dtype=np.uint8
     )
 
     profile = {
-        'driver':    'GTiff',
-        'height':    ref_height,
-        'width':     ref_width,
-        'count':     1,
-        'dtype':     'uint8',
-        'crs':       ref_crs,
-        'transform': ref_transform,
-        'nodata':    0,
-        'compress':  'lzw'
+        'driver': 'GTiff', 'height': height, 'width': width,
+        'count': 1, 'dtype': 'uint8', 'crs': crs,
+        'transform': transform, 'nodata': 0, 'compress': 'lzw'
     }
-
     with rasterio.open(output_path, 'w', **profile) as dst:
         dst.write(mask_arr, 1)
 
     inside  = int(mask_arr.sum())
     outside = int((mask_arr == 0).sum())
-    print(f"  ✅ Constraint mask → {output_path.name}")
-    print(f"     Inside Bungoma: {inside:,} px  |  Outside: {outside:,} px")
+    print(f"    Inside:  {inside:,} px")
+    print(f"    Outside: {outside:,} px")
     return output_path
 
 
 def main():
-    print("=" * 60)
-    print("  CLIP RASTERS TO BUNGOMA BOUNDARY")
-    print("=" * 60)
+    config = load_config()
+    paths  = config['_paths']
+
+    print("=" * 55)
+    print(f"  CLIP TO BOUNDARY: {config['display_name'].upper()}")
+    print("=" * 55)
     print()
 
-    # 1. Load boundary
-    boundary = load_boundary(BOUNDARY_PATH)
-    shapes = list(boundary.geometry)
-    print()
+    create_county_dirs(config)
 
-    # 2. Clip each normalized layer IN-PLACE
-    print("── Clipping normalized layers ──────────────────────────────")
-    clipped_reference = None
-
-    for name in LAYERS:
-        src_path = NORMALIZED_DIR / f'normalized_{name}.tif'
-        if not src_path.exists():
-            print(f"  ⚠️  Missing: {src_path.name} — skipping")
-            continue
-
-        clip_raster(src_path, src_path, shapes, nodata=0)
-
-        if clipped_reference is None:
-            clipped_reference = src_path
-
-    print()
-
-    # 3. Regenerate constraint mask aligned to clipped rasters
-    print("── Regenerating constraint mask ────────────────────────────")
-    if clipped_reference is None:
-        print("❌ No clipped rasters found — cannot generate constraint mask.")
+    # Load boundary
+    boundary_path = paths['boundary']
+    if not boundary_path.exists():
+        print(f"❌ Boundary not found: {boundary_path}")
         return
 
-    generate_constraint_mask(boundary, clipped_reference, CONSTRAINT_OUT)
+    gdf    = gpd.read_file(boundary_path)
+    if str(gdf.crs) != 'EPSG:4326':
+        gdf = gdf.to_crs('EPSG:4326')
+    shapes = list(gdf.geometry)
+
+    # Clip each normalized layer in-place
+    print("── Clipping normalized layers ───────────────────────────")
+    clipped_reference = None
+
+    for name, path in paths['normalized_layers'].items():
+        if not path.exists():
+            print(f"  ⚠️  Missing: {path.name} — skipping")
+            continue
+        clip_raster(path, path, shapes, nodata=0)
+        print(f"  ✅ {name}")
+        if clipped_reference is None:
+            clipped_reference = path
+
     print()
 
-    # 4. Summary
-    print("=" * 60)
-    print("  DONE — next steps:")
-    print("  1. Restart the FastAPI server (python src/api.py)")
-    print("  2. Run a fresh analysis in the frontend")
-    print("  3. The map should now follow Bungoma's actual shape")
-    print("=" * 60)
+    # Regenerate constraint mask
+    print("── Regenerating constraint mask ─────────────────────────")
+    if clipped_reference is None:
+        print("❌ No clipped layers found.")
+        return
+
+    generate_constraint_mask(gdf, clipped_reference, paths['constraint_mask'])
+    print(f"  ✅ Saved: {paths['constraint_mask'].name}")
+    print()
+
+    # Verify zero pixel counts match across layers
+    print("── Verification ─────────────────────────────────────────")
+    for name, path in paths['normalized_layers'].items():
+        if not path.exists():
+            continue
+        with rasterio.open(path) as src:
+            data = src.read(1)
+        zeros = (data == 0).sum()
+        total = data.size
+        print(f"  {name}: {zeros}/{total} zero px ({zeros/total*100:.1f}%)")
+
+    print()
+    print("=" * 55)
+    print("  DONE — restart the API:")
+    print("  python src/api.py")
+    print("=" * 55)
 
 
 if __name__ == '__main__':

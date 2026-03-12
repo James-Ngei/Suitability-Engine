@@ -6,18 +6,18 @@ import numpy as np
 from pathlib import Path
 
 # --- Paths ---
-RAW_DIR = Path("data/raw")          # original rasters
-BOUNDARY_PATH = Path("data/boundaries/bungoma_boundary.gpkg")
-PROCESSED_DIR = Path("data/preprocessed")
+RAW_DIR = Path("data/counties/kitui/raw")          # original rasters
+BOUNDARY_PATH = Path("data/counties/kitui/boundaries/kitui_boundary.gpkg")
+PROCESSED_DIR = Path("data/counties/kitui/processed")
 PROCESSED_DIR.mkdir(exist_ok=True)
-REFERENCE_RASTER = PROCESSED_DIR / "bungoma_elevation.tif"
+REFERENCE_RASTER = PROCESSED_DIR / "kitui_elevation.tif"
 
 # --- Parameters ---
 TARGET_CRS = "EPSG:4326"
 NODATA_VALUE = 255
 
 # --- Load boundary ---
-print("📌 Loading Bungoma county boundary...")
+print("📌 Loading Kitui county boundary...")
 boundary = gpd.read_file(BOUNDARY_PATH)
 print(f"✅ Boundary loaded, {len(boundary)} features found.")
 
@@ -80,7 +80,7 @@ for raster_path in RAW_DIR.rglob("*.tif"):
                     nodata=NODATA_VALUE
                 )
 
-        print(f"  ✅ Clipped to Bungoma boundary, shape: {clipped.shape[1:]}")
+        print(f"  ✅ Clipped to Kitui boundary, shape: {clipped.shape[1:]}")
 
         # Save preprocessed raster
         out_meta = kwargs.copy()

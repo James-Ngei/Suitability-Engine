@@ -2,10 +2,9 @@ import React from 'react';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const BUNGOMA_CENTER = [0.75, 34.65];
 const API_BASE = 'http://localhost:8000';
 
-// ── Fit map to boundary once GeoJSON loads ─────────────────────────────────
+// ── Fit map to boundary ────────────────────────────────────────────────────────
 function FitToBoundary({ geojson }) {
   const map = useMap();
   React.useEffect(() => {
@@ -21,25 +20,20 @@ function FitToBoundary({ geojson }) {
   return null;
 }
 
-// ── Suitability PNG overlay ────────────────────────────────────────────────
-// Uses raster_bounds returned by the API — NOT hardcoded values.
-// This ensures the PNG is placed at exactly the right coordinates.
+// ── Suitability PNG overlay ────────────────────────────────────────────────────
 function SuitabilityOverlay({ result }) {
-  if (!result || !result.analysis_id || !result.raster_bounds) return null;
-
-  const imageUrl = `${API_BASE}/map-image/${result.analysis_id}?t=${Date.now()}`;
-
+  if (!result?.analysis_id || !result?.raster_bounds) return null;
   return (
     <ImageOverlay
-      url={imageUrl}
-      bounds={result.raster_bounds}   // [[south, west], [north, east]] from API
+      url={`${API_BASE}/map-image/${result.analysis_id}?t=${Date.now()}`}
+      bounds={result.raster_bounds}
       opacity={0.8}
       zIndex={10}
     />
   );
 }
 
-// ── Bungoma boundary outline ───────────────────────────────────────────────
+// ── County boundary outline ────────────────────────────────────────────────────
 function BoundaryOverlay({ geojson }) {
   if (!geojson) return null;
   return (
@@ -51,17 +45,17 @@ function BoundaryOverlay({ geojson }) {
   );
 }
 
-// ── Legend ─────────────────────────────────────────────────────────────────
-function Legend({ analysisResult, boundaryLoaded }) {
+// ── Legend ─────────────────────────────────────────────────────────────────────
+function Legend({ result, countyInfo, boundaryLoaded }) {
   return (
     <div style={{
       position: 'absolute', bottom: '30px', right: '10px',
-      zIndex: 1000, background: 'white', padding: '1rem',
+      zIndex: 1000, background: 'white', padding: '0.85rem 1rem',
       borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-      minWidth: '175px'
+      minWidth: '190px', maxWidth: '210px'
     }}>
-      <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-        Suitability
+      <div style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.88rem', color: '#333' }}>
+        {countyInfo ? `${countyInfo.crop} Suitability` : 'Suitability'}
       </div>
 
       {[
@@ -73,47 +67,52 @@ function Legend({ analysisResult, boundaryLoaded }) {
       ].map(({ color, label, border }) => (
         <div key={label} style={{
           display: 'flex', alignItems: 'center', gap: '0.5rem',
-          fontSize: '0.82rem', marginBottom: '0.25rem'
+          fontSize: '0.8rem', marginBottom: '0.22rem'
         }}>
           <div style={{
-            width: '20px', height: '12px', background: color,
+            width: '18px', height: '11px', background: color,
             border: border || 'none', borderRadius: '2px', flexShrink: 0
           }} />
-          <span>{label}</span>
+          <span style={{ color: '#444' }}>{label}</span>
         </div>
       ))}
 
       {boundaryLoaded && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: '0.5rem',
-          fontSize: '0.82rem', marginTop: '0.4rem'
+          fontSize: '0.8rem', marginTop: '0.3rem'
         }}>
           <div style={{
-            width: '20px', height: '0px',
+            width: '18px', height: '0',
             borderTop: '2.5px solid #1a237e', flexShrink: 0
           }} />
-          <span>Bungoma boundary</span>
+          <span style={{ color: '#444' }}>
+            {countyInfo ? `${countyInfo.display_name} boundary` : 'County boundary'}
+          </span>
         </div>
       )}
 
-      {analysisResult && (
+      {result && (
         <div style={{
-          marginTop: '0.75rem', paddingTop: '0.75rem',
-          borderTop: '1px solid #ddd', fontSize: '0.85rem'
+          marginTop: '0.65rem', paddingTop: '0.65rem',
+          borderTop: '1px solid #eee', fontSize: '0.83rem', color: '#333'
         }}>
-          <strong>Mean Score:</strong> {analysisResult.statistics.mean.toFixed(1)}
+          <strong>Mean Score:</strong> {result.statistics.mean.toFixed(1)}
         </div>
       )}
     </div>
   );
 }
 
-// ── Main component ─────────────────────────────────────────────────────────
-function MapView({ analysisResult }) {
+// ── Main MapView ───────────────────────────────────────────────────────────────
+function MapView({ analysisResult, countyInfo }) {
   const [boundaryGeoJSON, setBoundaryGeoJSON] = React.useState(null);
-  const [boundaryError, setBoundaryError]     = React.useState(false);
+  const [boundaryError,   setBoundaryError]   = React.useState(false);
 
-  // Fetch boundary once on mount
+  // Default center from countyInfo or fallback to Kenya centre
+  const center = countyInfo?.map_center ?? [-0.5, 37.5];
+  const zoom   = countyInfo?.map_zoom   ?? 8;
+
   React.useEffect(() => {
     fetch(`${API_BASE}/boundary-geojson`)
       .then(res => {
@@ -128,10 +127,10 @@ function MapView({ analysisResult }) {
   }, []);
 
   return (
-    <div className="map-container" style={{ position: 'relative' }}>
+    <div className="map-container">
       <MapContainer
-        center={BUNGOMA_CENTER}
-        zoom={10}
+        center={center}
+        zoom={zoom}
         style={{ height: '100%', width: '100%' }}
       >
         <TileLayer
@@ -139,17 +138,11 @@ function MapView({ analysisResult }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {/* Fit viewport to actual county boundary */}
         <FitToBoundary geojson={boundaryGeoJSON} />
-
-        {/* Suitability heatmap using exact bounds from API */}
         <SuitabilityOverlay result={analysisResult} />
-
-        {/* County boundary outline */}
         <BoundaryOverlay geojson={boundaryGeoJSON} />
       </MapContainer>
 
-      {/* Prompt before first analysis */}
       {!analysisResult && (
         <div style={{
           position: 'absolute', top: '50%', left: '50%',
@@ -166,7 +159,6 @@ function MapView({ analysisResult }) {
         </div>
       )}
 
-      {/* Warning if boundary failed to load */}
       {boundaryError && (
         <div style={{
           position: 'absolute', top: '10px', left: '50%',
@@ -175,12 +167,13 @@ function MapView({ analysisResult }) {
           borderRadius: '6px', padding: '0.4rem 0.8rem',
           fontSize: '0.8rem', zIndex: 1000, color: '#856404'
         }}>
-          ⚠️ Boundary outline unavailable — check /boundary-geojson endpoint
+          ⚠️ Boundary unavailable — check /boundary-geojson
         </div>
       )}
 
       <Legend
-        analysisResult={analysisResult}
+        result={analysisResult}
+        countyInfo={countyInfo}
         boundaryLoaded={!!boundaryGeoJSON}
       />
     </div>
