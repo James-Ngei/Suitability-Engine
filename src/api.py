@@ -4,6 +4,7 @@ All county-specific config is read from the active county config file.
 Switch counties by changing config/active_county.txt and restarting.
 """
 
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -19,6 +20,7 @@ from PIL import Image
 import io
 import geopandas as gpd
 import sys
+
 
 sys.path.append(str(Path(__file__).parent))
 from config import load_config
@@ -233,13 +235,29 @@ async def run_analysis(request: SuitabilityRequest):
         "median": float(np.median(valid_data)),
     }
 
-    total_pixels = suitability.size
+    # Use only pixels inside the county boundary as denominator
+    boundary_pixels = (suitability > 0).sum()  # non-zero = inside boundary & not protected
+    # Load constraint mask to find protected pixels inside boundary
+    protected_pixels = 0
+    if request.apply_constraints and PATHS['constraint_mask'].exists():
+        with rasterio.open(PATHS['constraint_mask']) as src:
+            cmask = src.read(1)
+        # Resize mask to match suitability shape if needed
+        inside_boundary = (cmask > 0).sum()
+        protected_pixels = int(inside_boundary - boundary_pixels)
+        if protected_pixels < 0:
+            protected_pixels = 0
+    else:
+        inside_boundary = boundary_pixels
+
+    total_pixels = int(inside_boundary) if inside_boundary > 0 else suitability.size
+
     classification = {
         "highly_suitable_pct":     float((suitability >= 70).sum() / total_pixels * 100),
         "moderately_suitable_pct": float(((suitability >= 50) & (suitability < 70)).sum() / total_pixels * 100),
         "marginally_suitable_pct": float(((suitability >= 30) & (suitability < 50)).sum() / total_pixels * 100),
         "not_suitable_pct":        float(((suitability > 0)  & (suitability < 30)).sum() / total_pixels * 100),
-        "excluded_pct":            float((suitability == 0).sum() / total_pixels * 100),
+        "excluded_pct":            float(protected_pixels / total_pixels * 100),
     }
 
     # Save GeoTIFF
@@ -289,17 +307,33 @@ async def get_map_image(analysis_id: str):
     h, w  = data.shape
     rgba  = np.zeros((h, w, 4), dtype=np.uint8)
     valid = data > 0
-    norm  = np.clip(data / 100.0, 0, 1)
+    s     = data  # raw scores 0-100
 
-    # Red → amber → green
-    r = np.where(norm < 0.5, 239 + (255-239)*(norm*2),       255 + (46-255) *((norm-0.5)*2))
-    g = np.where(norm < 0.5, 83  + (167-83) *(norm*2),       167 + (125-167)*((norm-0.5)*2))
-    b = np.where(norm < 0.5, 80  + (38-80)  *(norm*2),       38  + (50-38)  *((norm-0.5)*2))
+    # Colour bands matching classification thresholds:
+    # <30  → red    #ef5350  (239, 83, 80)
+    # 30-50 → amber  #ffa726  (255, 167, 38)
+    # 50-70 → light green #66bb6a (102, 187, 106)
+    # >=70  → dark green #2e7d32 (46, 125, 50)
+    r = np.select(
+        [s < 30, s < 50, s < 70, s >= 70],
+        [239,     255,    102,     46],
+        default=0
+    )
+    g = np.select(
+        [s < 30, s < 50, s < 70, s >= 70],
+        [83,      167,    187,     125],
+        default=0
+    )
+    b = np.select(
+        [s < 30, s < 50, s < 70, s >= 70],
+        [80,      38,     106,     50],
+        default=0
+    )
 
     rgba[valid, 0] = np.clip(r[valid], 0, 255).astype(np.uint8)
     rgba[valid, 1] = np.clip(g[valid], 0, 255).astype(np.uint8)
     rgba[valid, 2] = np.clip(b[valid], 0, 255).astype(np.uint8)
-    rgba[valid, 3] = 200
+    rgba[valid, 3] = 255  # Opaque where valid, transparent where 0
 
     img = Image.fromarray(rgba, mode='RGBA')
     buf = io.BytesIO()

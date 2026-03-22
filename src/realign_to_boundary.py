@@ -1,7 +1,7 @@
 """
 realign_to_boundary.py
 -----------------------
-Reprojects all aligned rasters so their pixel grid snaps exactly to the
+Reprojects all preprocessed rasters so their pixel grid snaps exactly to the
 county boundary extent. Reads paths and resolution from active county config.
 
 Run ONCE after preprocessing, before normalize.py:
@@ -65,11 +65,14 @@ def main():
           f"east={east:.6f}, north={north:.6f}")
     print()
 
-    # Reproject each layer
+    # Read from preprocessed layers, write to processed/aligned_*.tif
     print("── Realigning ───────────────────────────────────────────")
-    for name, src_path in paths['aligned_layers'].items():
+    for name in config['layers']:
+        src_path = paths['layers'][name]          # preprocessed/kitui_elevation.tif
+        dst_path = paths['aligned_layers'][name]  # processed/aligned_elevation.tif
+
         if not src_path.exists():
-            print(f"  ⚠️  Missing: {src_path.name} — skipping")
+            print(f"  ⚠️  Missing source: {src_path.name} — skipping")
             continue
 
         with rasterio.open(src_path) as src:
@@ -92,10 +95,11 @@ def main():
                 compress='lzw', nodata=0
             )
 
-        with rasterio.open(src_path, 'w', **profile) as dst:
+        dst_path.parent.mkdir(parents=True, exist_ok=True)
+        with rasterio.open(dst_path, 'w', **profile) as dst:
             dst.write(destination, 1)
 
-        print(f"  ✅ {name}: shape=({height},{width})")
+        print(f"  ✅ {name}: {src_path.name} → {dst_path.name} ({width}×{height})")
 
     print()
     print("=" * 55)

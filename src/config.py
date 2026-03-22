@@ -8,6 +8,9 @@ To switch counties:
     echo "kitui" > config/active_county.txt
     python src/normalize.py
     python src/api.py
+
+Shared data (used by all counties) lives under data/shared/:
+    data/shared/protected_areas_kenya.gpkg   ← download once from protectedplanet.net
 """
 
 import json
@@ -16,6 +19,7 @@ from pathlib import Path
 BASE_DIR    = Path.home() / 'suitability-engine'
 CONFIG_DIR  = BASE_DIR / 'config'
 ACTIVE_FILE = CONFIG_DIR / 'active_county.txt'
+SHARED_DIR  = BASE_DIR / 'data' / 'shared'
 
 
 def get_active_county() -> str:
@@ -35,7 +39,7 @@ def get_active_county() -> str:
 def load_config(county: str = None) -> dict:
     """
     Load config for a county. Uses active county if none specified.
-    Returns the full config dict.
+    Returns the full config dict with resolved paths attached as '_paths'.
     """
     if county is None:
         county = get_active_county()
@@ -51,28 +55,33 @@ def load_config(county: str = None) -> dict:
     with open(config_path) as f:
         config = json.load(f)
 
-    # Attach resolved paths so scripts don't have to build them
     config['_paths'] = _resolve_paths(config)
-
     return config
 
 
 def _resolve_paths(config: dict) -> dict:
     """Build all filesystem paths from config."""
-    county = config['county']
+    county     = config['county']
     county_dir = BASE_DIR / 'data' / 'counties' / county
 
     return {
-        'county_dir':      county_dir,
-        'boundary':        county_dir / 'boundaries' / f'{county}_boundary.gpkg',
-        'raw_dir':         county_dir / 'raw',
+        # County-specific dirs
+        'county_dir':       county_dir,
+        'boundary':         county_dir / 'boundaries' / f'{county}_boundary.gpkg',
+        'raw_dir':          county_dir / 'raw',
         'preprocessed_dir': county_dir / 'preprocessed',
-        'processed_dir':   county_dir / 'processed',
-        'normalized_dir':  county_dir / 'normalized',
-        'results_dir':     county_dir / 'results',
-        'api_results_dir': county_dir / 'api_results',
-        'sensitivity_dir': county_dir / 'sensitivity',
-        'constraint_mask': county_dir / 'preprocessed' / f'{county}_constraints_mask.tif',
+        'processed_dir':    county_dir / 'processed',
+        'normalized_dir':   county_dir / 'normalized',
+        'results_dir':      county_dir / 'results',
+        'api_results_dir':  county_dir / 'api_results',
+        'sensitivity_dir':  county_dir / 'sensitivity',
+        'constraint_mask':  county_dir / 'preprocessed' / f'{county}_constraints_mask.tif',
+
+        # Shared across all counties (download once)
+        'shared_dir':      SHARED_DIR,
+        'protected_areas': SHARED_DIR / 'protected_areas_kenya.gpkg',
+
+        # Layer paths derived from config['layers']
         'layers': {
             name: county_dir / 'preprocessed' / fname
             for name, fname in config['layers'].items()
@@ -89,7 +98,7 @@ def _resolve_paths(config: dict) -> dict:
 
 
 def create_county_dirs(config: dict):
-    """Create all required directories for a county."""
+    """Create all required directories for a county (including shared/)."""
     paths = config['_paths']
     dirs = [
         paths['raw_dir'],
@@ -100,6 +109,7 @@ def create_county_dirs(config: dict):
         paths['api_results_dir'],
         paths['sensitivity_dir'],
         paths['boundary'].parent,
+        paths['shared_dir'],
     ]
     for d in dirs:
         d.mkdir(parents=True, exist_ok=True)
@@ -119,3 +129,4 @@ if __name__ == '__main__':
     print(f"Resolution   : {config['resolution']}°")
     print(f"Layers       : {list(config['layers'].keys())}")
     print(f"Available    : {list_counties()}")
+    print(f"Protected    : {config['_paths']['protected_areas']}")
