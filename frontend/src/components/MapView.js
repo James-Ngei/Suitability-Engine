@@ -4,7 +4,6 @@ import 'leaflet/dist/leaflet.css';
 
 const API_BASE = 'http://localhost:8000';
 
-// ── Fit map to boundary ────────────────────────────────────────────────────────
 function FitToBoundary({ geojson }) {
   const map = useMap();
   React.useEffect(() => {
@@ -20,96 +19,111 @@ function FitToBoundary({ geojson }) {
   return null;
 }
 
-// ── Suitability PNG overlay ────────────────────────────────────────────────────
 function SuitabilityOverlay({ result }) {
   if (!result?.analysis_id || !result?.raster_bounds) return null;
   return (
     <ImageOverlay
       url={`${API_BASE}/map-image/${result.analysis_id}?t=${Date.now()}`}
       bounds={result.raster_bounds}
-      opacity={0.8}
+      opacity={0.78}
       zIndex={10}
     />
   );
 }
 
-// ── County boundary outline ────────────────────────────────────────────────────
 function BoundaryOverlay({ geojson }) {
   if (!geojson) return null;
   return (
     <GeoJSON
       key={JSON.stringify(geojson)}
       data={geojson}
-      style={{ color: '#1a237e', weight: 2.5, fillOpacity: 0 }}
+      style={{ color: '#1a5c0a', weight: 2, fillOpacity: 0, dashArray: '5 4' }}
     />
   );
 }
 
-// ── Legend ─────────────────────────────────────────────────────────────────────
 function Legend({ result, countyInfo, boundaryLoaded }) {
   return (
     <div style={{
-      position: 'absolute', bottom: '30px', right: '10px',
-      zIndex: 1000, background: 'white', padding: '0.85rem 1rem',
-      borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-      minWidth: '190px', maxWidth: '210px'
+      position: 'absolute', bottom: '28px', right: '10px',
+      zIndex: 1000,
+      background: 'rgba(255,255,255,0.95)',
+      border: '1px solid #c8d8b8',
+      padding: '0.7rem 0.85rem',
+      borderRadius: '8px',
+      minWidth: '175px',
+      boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
+      fontFamily: 'inherit',
     }}>
-      <div style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.88rem', color: '#333' }}>
-        {countyInfo ? `${countyInfo.crop} Suitability` : 'Suitability'}
+      <div style={{
+        fontSize: '0.62rem',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.09em',
+        color: '#5a7a42',
+        marginBottom: '0.5rem',
+        paddingBottom: '0.3rem',
+        borderBottom: '1px solid #dde5d4',
+      }}>
+        {countyInfo ? `${countyInfo.crop} Suitability` : 'Suitability Index'}
       </div>
 
       {[
-        { color: '#2e7d32', label: 'Highly suitable (≥70)' },
-        { color: '#66bb6a', label: 'Moderate (50–70)' },
-        { color: '#ffa726', label: 'Marginal (30–50)' },
-        { color: '#ef5350', label: 'Not suitable (<30)' },
-        { color: 'transparent', label: 'Excluded / No data', border: '1px solid #ccc' },
-      ].map(({ color, label, border }) => (
+        { color: '#2d7a1b', label: 'Highly suitable',  note: '≥ 70' },
+        { color: '#74b83e', label: 'Moderate',          note: '50–70' },
+        { color: '#e0a020', label: 'Marginal',          note: '30–50' },
+        { color: '#d04030', label: 'Not suitable',      note: '< 30' },
+        { color: '#e8ede0', label: 'Excluded',          note: 'Protected', border: '1px solid #c8d8b8' },
+      ].map(({ color, label, note, border }) => (
         <div key={label} style={{
-          display: 'flex', alignItems: 'center', gap: '0.5rem',
-          fontSize: '0.8rem', marginBottom: '0.22rem'
+          display: 'flex', alignItems: 'center', gap: '0.45rem',
+          fontSize: '0.72rem', marginBottom: '0.22rem',
         }}>
           <div style={{
-            width: '18px', height: '11px', background: color,
-            border: border || 'none', borderRadius: '2px', flexShrink: 0
+            width: '11px', height: '11px', flexShrink: 0,
+            background: color, border: border || 'none', borderRadius: '2px',
           }} />
-          <span style={{ color: '#444' }}>{label}</span>
+          <span style={{ color: '#2a3a1a', flex: 1 }}>{label}</span>
+          <span style={{ color: '#7a8f68', fontSize: '0.68rem' }}>{note}</span>
         </div>
       ))}
 
       {boundaryLoaded && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: '0.5rem',
-          fontSize: '0.8rem', marginTop: '0.3rem'
+          display: 'flex', alignItems: 'center', gap: '0.45rem',
+          fontSize: '0.7rem', marginTop: '0.35rem',
+          paddingTop: '0.35rem', borderTop: '1px solid #dde5d4',
         }}>
           <div style={{
-            width: '18px', height: '0',
-            borderTop: '2.5px solid #1a237e', flexShrink: 0
+            width: '11px', height: '0',
+            borderTop: '2px dashed #1a5c0a', flexShrink: 0,
           }} />
-          <span style={{ color: '#444' }}>
-            {countyInfo ? `${countyInfo.display_name} boundary` : 'County boundary'}
+          <span style={{ color: '#5a7a42' }}>
+            {countyInfo ? countyInfo.display_name : 'County'} boundary
           </span>
         </div>
       )}
 
       {result && (
         <div style={{
-          marginTop: '0.65rem', paddingTop: '0.65rem',
-          borderTop: '1px solid #eee', fontSize: '0.83rem', color: '#333'
+          marginTop: '0.45rem', paddingTop: '0.4rem',
+          borderTop: '1px solid #dde5d4',
+          fontSize: '0.7rem', color: '#5a7a42',
         }}>
-          <strong>Mean Score:</strong> {result.statistics.mean.toFixed(1)}
+          Mean score:{' '}
+          <span style={{ fontWeight: 700, color: '#2d5a1b' }}>
+            {result.statistics.mean.toFixed(1)}
+          </span>
         </div>
       )}
     </div>
   );
 }
 
-// ── Main MapView ───────────────────────────────────────────────────────────────
 function MapView({ analysisResult, countyInfo }) {
   const [boundaryGeoJSON, setBoundaryGeoJSON] = React.useState(null);
   const [boundaryError,   setBoundaryError]   = React.useState(false);
 
-  // Default center from countyInfo or fallback to Kenya centre
   const center = countyInfo?.map_center ?? [-0.5, 37.5];
   const zoom   = countyInfo?.map_zoom   ?? 8;
 
@@ -137,25 +151,15 @@ function MapView({ analysisResult, countyInfo }) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-
         <FitToBoundary geojson={boundaryGeoJSON} />
         <SuitabilityOverlay result={analysisResult} />
         <BoundaryOverlay geojson={boundaryGeoJSON} />
       </MapContainer>
 
       {!analysisResult && (
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: 'rgba(255,255,255,0.88)',
-          padding: '1.2rem 1.8rem', borderRadius: '10px',
-          textAlign: 'center', pointerEvents: 'none',
-          zIndex: 500, boxShadow: '0 2px 10px rgba(0,0,0,0.15)'
-        }}>
-          <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🗺️</div>
-          <p style={{ margin: 0, color: '#444' }}>
-            Adjust weights and click <strong>Run Analysis</strong>
-          </p>
+        <div className="map-prompt">
+          <div className="icon">🗺️</div>
+          <p>Adjust weights and click<br /><strong>Run Analysis</strong></p>
         </div>
       )}
 
@@ -163,11 +167,11 @@ function MapView({ analysisResult, countyInfo }) {
         <div style={{
           position: 'absolute', top: '10px', left: '50%',
           transform: 'translateX(-50%)',
-          background: '#fff3cd', border: '1px solid #ffc107',
-          borderRadius: '6px', padding: '0.4rem 0.8rem',
-          fontSize: '0.8rem', zIndex: 1000, color: '#856404'
+          background: '#fff8f0', border: '1px solid #e8b080',
+          borderRadius: '6px', padding: '0.35rem 0.7rem',
+          fontSize: '0.73rem', zIndex: 1000, color: '#8a4010',
         }}>
-          ⚠️ Boundary unavailable — check /boundary-geojson
+          ⚠ Boundary unavailable
         </div>
       )}
 
