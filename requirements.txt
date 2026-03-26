@@ -10,3 +10,4 @@ pillow
 # Web tiling dependencies for efficient tile serving
 mercantile>=1.2.1
 rio-cogeo>=6.0.0
+boto3
