@@ -109,6 +109,8 @@ def sync_county_from_s3() -> bool:
         f"{county}/boundary/":     PATHS["boundary"].parent,
         # constraints/ holds protected_areas_kenya.gpkg → goes to shared/
         f"{county}/constraints/":  PATHS["shared_dir"],
+        # preprocessed/ holds kitui_constraints_mask.tif
+        f"{county}/preprocessed/": PATHS["constraint_mask"].parent,
     }
 
     total_downloaded = 0
