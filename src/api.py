@@ -1,9 +1,16 @@
 """
 FastAPI Backend for Multi-Criteria Suitability Analysis
 All county-specific config is read from the active county config file.
-Switch counties by changing config/active_county.txt and restarting.
-"""
+Switch counties by changing config/active_county.txt (or ACTIVE_COUNTY env var).
 
+S3 bucket layout expected:
+  suitability-engine/
+    kitui/
+      normalized/   normalized_elevation.tif  normalized_rainfall.tif ...
+      boundary/     kitui_boundary.gpkg
+      constraints/  kitui_constraints_mask.tif
+      results/      (written back after each analysis)
+"""
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +27,11 @@ from PIL import Image
 import io
 import geopandas as gpd
 import sys
+import os
+import logging
 
+logger = logging.getLogger("suitability-api")
+logging.basicConfig(level=logging.INFO)
 
 sys.path.append(str(Path(__file__).parent))
 from config import load_config
@@ -31,9 +42,11 @@ PATHS  = CONFIG['_paths']
 
 app = FastAPI(
     title=f"{CONFIG['crop']} Suitability Analysis API — {CONFIG['display_name']}",
-    description=f"Multi-criteria suitability analysis for {CONFIG['crop'].lower()} "
-                f"farming in {CONFIG['display_name']}, {CONFIG['country']}",
-    version="2.0.0"
+    description=(
+        f"Multi-criteria suitability analysis for {CONFIG['crop'].lower()} "
+        f"farming in {CONFIG['display_name']}, {CONFIG['country']}"
+    ),
+    version="2.1.0"
 )
 
 app.add_middleware(
@@ -45,43 +58,188 @@ app.add_middleware(
 )
 
 # ── In-memory layer cache ──────────────────────────────────────────────────────
-NORMALIZED_LAYERS = {}
+NORMALIZED_LAYERS: Dict[str, np.ndarray] = {}
 LAYERS_PROFILE    = None
 RASTER_BOUNDS     = None
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# S3 SYNC
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _s3_client():
+    """Return a boto3 S3 client, or None if boto3 / credentials are absent."""
+    try:
+        import boto3
+        return boto3.client("s3")
+    except Exception as e:
+        logger.warning(f"boto3 unavailable or credentials missing: {e}")
+        return None
+
+
+def sync_county_from_s3() -> bool:
+    """
+    Download county data from S3 into the local filesystem before the API
+    loads layers.
+
+    S3 layout (actual):
+        <bucket>/<county>/normalized/   normalized_<layer>.tif
+        <bucket>/<county>/boundary/     <county>_boundary.gpkg
+        <bucket>/<county>/constraints/  protected_areas_kenya.gpkg
+
+    Local layout (mirrors config._paths):
+        SUITABILITY_DATA_DIR/data/counties/<county>/normalized/
+        SUITABILITY_DATA_DIR/data/counties/<county>/boundaries/
+        SUITABILITY_DATA_DIR/data/shared/               ← protected areas go here
+    """
+    bucket = os.environ.get("AWS_S3_BUCKET")
+    if not bucket:
+        logger.info("AWS_S3_BUCKET not set — skipping S3 sync, using local files.")
+        return True
+
+    s3 = _s3_client()
+    if s3 is None:
+        return False
+
+    county = CONFIG["county"]
+
+    # Map:  s3_prefix  →  local_directory
+    sync_map = {
+        f"{county}/normalized/":   PATHS["normalized_dir"],
+        f"{county}/boundary/":     PATHS["boundary"].parent,
+        # constraints/ holds protected_areas_kenya.gpkg → goes to shared/
+        f"{county}/constraints/":  PATHS["shared_dir"],
+    }
+
+    total_downloaded = 0
+    total_skipped    = 0
+
+    for s3_prefix, local_dir in sync_map.items():
+        local_dir = Path(local_dir)
+        local_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            paginator = s3.get_paginator("list_objects_v2")
+            pages     = paginator.paginate(Bucket=bucket, Prefix=s3_prefix)
+
+            for page in pages:
+                for obj in page.get("Contents", []):
+                    key       = obj["Key"]
+                    filename  = key.split("/")[-1]
+
+                    # Skip S3 "folder" placeholders
+                    if not filename:
+                        continue
+
+                    local_path = local_dir / filename
+
+                    # Only download if missing or S3 version is newer
+                    s3_mtime = obj["LastModified"].timestamp()
+                    if local_path.exists():
+                        local_mtime = local_path.stat().st_mtime
+                        if local_mtime >= s3_mtime:
+                            logger.info(f"  ✓ Skip (up to date): {filename}")
+                            total_skipped += 1
+                            continue
+
+                    logger.info(f"  ↓ Downloading: s3://{bucket}/{key}  →  {local_path}")
+                    s3.download_file(bucket, key, str(local_path))
+                    total_downloaded += 1
+
+        except Exception as e:
+            logger.error(f"S3 sync failed for prefix '{s3_prefix}': {e}")
+            return False
+
+    logger.info(
+        f"S3 sync complete — {total_downloaded} downloaded, {total_skipped} skipped."
+    )
+    return True
+
+
+def upload_result_to_s3(local_path: Path, analysis_id: str):
+    """
+    Upload a finished GeoTIFF result back to S3 (optional — best-effort).
+    S3 key: <county>/results/suitability_<analysis_id>.tif
+    """
+    bucket = os.environ.get("AWS_S3_BUCKET")
+    if not bucket:
+        return
+
+    s3 = _s3_client()
+    if s3 is None:
+        return
+
+    county  = CONFIG["county"]
+    s3_key  = f"{county}/results/suitability_{analysis_id}.tif"
+
+    try:
+        s3.upload_file(str(local_path), bucket, s3_key)
+        logger.info(f"  ↑ Uploaded result: s3://{bucket}/{s3_key}")
+    except Exception as e:
+        logger.warning(f"Result upload to S3 failed (non-fatal): {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LAYER LOADING
+# ══════════════════════════════════════════════════════════════════════════════
+
 def load_layers():
     global NORMALIZED_LAYERS, LAYERS_PROFILE, RASTER_BOUNDS
 
-    for name, path in PATHS['normalized_layers'].items():
-        if path.exists():
-            with rasterio.open(path) as src:
-                NORMALIZED_LAYERS[name] = src.read(1).astype(np.float32)
-                if LAYERS_PROFILE is None:
-                    LAYERS_PROFILE = src.profile.copy()
-                    b = src.bounds
-                    RASTER_BOUNDS = [[b.bottom, b.left], [b.top, b.right]]
+    missing = []
+    for name, path in PATHS["normalized_layers"].items():
+        if not path.exists():
+            missing.append(str(path))
+            continue
 
-    print(f"✅ [{CONFIG['display_name']}] Loaded {len(NORMALIZED_LAYERS)} layers")
+        with rasterio.open(path) as src:
+            NORMALIZED_LAYERS[name] = src.read(1).astype(np.float32)
+            if LAYERS_PROFILE is None:
+                LAYERS_PROFILE = src.profile.copy()
+                b = src.bounds
+                RASTER_BOUNDS = [[b.bottom, b.left], [b.top, b.right]]
+
+        logger.info(f"  ✅ Loaded layer: {name}  ({path.name})")
+
+    if missing:
+        logger.warning(f"Missing normalized layers: {missing}")
+
+    logger.info(
+        f"[{CONFIG['display_name']}] Loaded {len(NORMALIZED_LAYERS)}/{len(PATHS['normalized_layers'])} layers"
+    )
     if RASTER_BOUNDS:
-        print(f"   Raster bounds: {RASTER_BOUNDS}")
+        logger.info(f"   Raster bounds: {RASTER_BOUNDS}")
 
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("=" * 55)
+    logger.info(f"  Starting: {CONFIG['display_name']} — {CONFIG['crop']}")
+    logger.info("=" * 55)
+
+    # 1. Pull data from S3
+    logger.info("── Syncing from S3 ──────────────────────────────────")
+    ok = sync_county_from_s3()
+    if not ok:
+        logger.error("S3 sync failed — API may have no data to serve.")
+
+    # 2. Load layers into memory
+    logger.info("── Loading normalized layers ─────────────────────────")
     load_layers()
 
 
-# ── Pydantic models ────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# PYDANTIC MODELS
+# ══════════════════════════════════════════════════════════════════════════════
+
 def make_weights_model():
-    """Dynamically build Weights model from config defaults."""
-    defaults = CONFIG['weights']
+    defaults = CONFIG["weights"]
     fields   = {
         name: (float, Field(default, ge=0.0, le=1.0))
         for name, default in defaults.items()
     }
     from pydantic import create_model
-    return create_model('Weights', **fields)
+    return create_model("Weights", **fields)
 
 Weights = make_weights_model()
 
@@ -102,14 +260,16 @@ class SuitabilityResponse(BaseModel):
     timestamp:         str
 
 
-# ── Endpoints ──────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# ENDPOINTS
+# ══════════════════════════════════════════════════════════════════════════════
 
 @app.get("/")
 async def root():
     return {
-        "county":   CONFIG['display_name'],
-        "crop":     CONFIG['crop'],
-        "version":  "2.0.0",
+        "county":  CONFIG["display_name"],
+        "crop":    CONFIG["crop"],
+        "version": "2.1.0",
         "endpoints": {
             "GET  /health":                  "Health check",
             "GET  /county":                  "Active county info",
@@ -119,45 +279,48 @@ async def root():
             "GET  /map-image/{analysis_id}": "PNG overlay for Leaflet",
             "GET  /results/{analysis_id}":   "Analysis metadata",
             "GET  /download/{analysis_id}":  "Download GeoTIFF",
-        }
+            "POST /admin/reload":            "Re-sync S3 and reload layers",
+        },
     }
 
 
 @app.get("/health")
 async def health_check():
     return {
-        "status":             "healthy",
-        "county":             CONFIG['display_name'],
+        "status":             "healthy" if NORMALIZED_LAYERS else "degraded",
+        "county":             CONFIG["display_name"],
         "layers_loaded":      len(NORMALIZED_LAYERS),
+        "layers_expected":    len(PATHS["normalized_layers"]),
         "available_criteria": list(NORMALIZED_LAYERS.keys()),
-        "boundary_available": PATHS['boundary'].exists(),
+        "boundary_available": PATHS["boundary"].exists(),
+        "constraint_mask":    PATHS["constraint_mask"].exists(),
         "raster_bounds":      RASTER_BOUNDS,
+        "s3_bucket":          os.environ.get("AWS_S3_BUCKET", "not configured"),
     }
 
 
 @app.get("/county")
 async def get_county_info():
-    """Return active county metadata for the frontend."""
     return {
-        "county":       CONFIG['county'],
-        "display_name": CONFIG['display_name'],
-        "country":      CONFIG['country'],
-        "crop":         CONFIG['crop'],
-        "map_center":   CONFIG['map_center'],
-        "map_zoom":     CONFIG['map_zoom'],
-        "weights":      CONFIG['weights'],
+        "county":       CONFIG["county"],
+        "display_name": CONFIG["display_name"],
+        "country":      CONFIG["country"],
+        "crop":         CONFIG["crop"],
+        "map_center":   CONFIG["map_center"],
+        "map_zoom":     CONFIG["map_zoom"],
+        "weights":      CONFIG["weights"],
     }
 
 
 @app.get("/criteria")
 async def get_criteria():
-    criteria_info = CONFIG['criteria_info']
-    weights       = CONFIG['weights']
+    criteria_info = CONFIG["criteria_info"]
+    weights       = CONFIG["weights"]
     return [
         {
-            "name":          name,
-            "description":   criteria_info[name]['description'],
-            "optimal_range": criteria_info[name]['optimal_range'],
+            "name":           name,
+            "description":    criteria_info[name]["description"],
+            "optimal_range":  criteria_info[name]["optimal_range"],
             "current_weight": weights[name],
         }
         for name in weights
@@ -166,21 +329,24 @@ async def get_criteria():
 
 @app.get("/boundary-geojson")
 async def get_boundary_geojson():
-    if not PATHS['boundary'].exists():
+    if not PATHS["boundary"].exists():
         raise HTTPException(status_code=404, detail="Boundary file not found")
-    gdf = gpd.read_file(PATHS['boundary'])
-    if str(gdf.crs) != 'EPSG:4326':
-        gdf = gdf.to_crs('EPSG:4326')
+    gdf = gpd.read_file(PATHS["boundary"])
+    if str(gdf.crs) != "EPSG:4326":
+        gdf = gdf.to_crs("EPSG:4326")
     return json.loads(gdf.to_json())
 
 
 @app.post("/analyze", response_model=SuitabilityResponse)
 async def run_analysis(request: SuitabilityRequest):
-    """Run weighted overlay. Returns analysis_id and raster_bounds for map overlay."""
+    if not NORMALIZED_LAYERS:
+        raise HTTPException(
+            status_code=503,
+            detail="No normalized layers loaded. Check /health and S3 configuration."
+        )
 
     weights_dict = request.weights
-    # Validate keys match config layers
-    expected = set(CONFIG['weights'].keys())
+    expected = set(CONFIG["weights"].keys())
     received = set(weights_dict.keys())
     if received != expected:
         raise HTTPException(
@@ -198,23 +364,25 @@ async def run_analysis(request: SuitabilityRequest):
         weights_dict = {k: v / total for k, v in weights_dict.items()}
 
     # Weighted overlay
-    suitability = np.zeros_like(list(NORMALIZED_LAYERS.values())[0], dtype=np.float32)
+    suitability = np.zeros_like(
+        list(NORMALIZED_LAYERS.values())[0], dtype=np.float32
+    )
     for name, weight in weights_dict.items():
         if name in NORMALIZED_LAYERS:
             suitability += NORMALIZED_LAYERS[name] * weight
 
     # Apply constraints
-    if request.apply_constraints and PATHS['constraint_mask'].exists():
-        with rasterio.open(PATHS['constraint_mask']) as src:
+    if request.apply_constraints and PATHS["constraint_mask"].exists():
+        with rasterio.open(PATHS["constraint_mask"]) as src:
             mask_aligned = np.zeros(suitability.shape, dtype=np.uint8)
             reproject(
                 source=rasterio.band(src, 1),
                 destination=mask_aligned,
                 src_transform=src.transform,
                 src_crs=src.crs,
-                dst_transform=LAYERS_PROFILE['transform'],
-                dst_crs=LAYERS_PROFILE['crs'],
-                resampling=Resampling.nearest
+                dst_transform=LAYERS_PROFILE["transform"],
+                dst_crs=LAYERS_PROFILE["crs"],
+                resampling=Resampling.nearest,
             )
             suitability = suitability * mask_aligned.astype(np.float32)
 
@@ -235,43 +403,42 @@ async def run_analysis(request: SuitabilityRequest):
         "median": float(np.median(valid_data)),
     }
 
-    # Use only pixels inside the county boundary as denominator
-    boundary_pixels = (suitability > 0).sum()  # non-zero = inside boundary & not protected
-    # Load constraint mask to find protected pixels inside boundary
+    boundary_pixels = int((suitability > 0).sum())
     protected_pixels = 0
-    if request.apply_constraints and PATHS['constraint_mask'].exists():
-        with rasterio.open(PATHS['constraint_mask']) as src:
+    if request.apply_constraints and PATHS["constraint_mask"].exists():
+        with rasterio.open(PATHS["constraint_mask"]) as src:
             cmask = src.read(1)
-        # Resize mask to match suitability shape if needed
-        inside_boundary = (cmask > 0).sum()
-        protected_pixels = int(inside_boundary - boundary_pixels)
-        if protected_pixels < 0:
-            protected_pixels = 0
+        inside_boundary  = int((cmask > 0).sum())
+        protected_pixels = max(0, inside_boundary - boundary_pixels)
     else:
         inside_boundary = boundary_pixels
 
     total_pixels = int(inside_boundary) if inside_boundary > 0 else suitability.size
 
     classification = {
-        "highly_suitable_pct":     float((suitability >= 70).sum() / total_pixels * 100),
-        "moderately_suitable_pct": float(((suitability >= 50) & (suitability < 70)).sum() / total_pixels * 100),
-        "marginally_suitable_pct": float(((suitability >= 30) & (suitability < 50)).sum() / total_pixels * 100),
-        "not_suitable_pct":        float(((suitability > 0)  & (suitability < 30)).sum() / total_pixels * 100),
+        "highly_suitable_pct":     float((suitability >= 70).sum()                           / total_pixels * 100),
+        "moderately_suitable_pct": float(((suitability >= 50) & (suitability < 70)).sum()   / total_pixels * 100),
+        "marginally_suitable_pct": float(((suitability >= 30) & (suitability < 50)).sum()   / total_pixels * 100),
+        "not_suitable_pct":        float(((suitability > 0)  & (suitability < 30)).sum()    / total_pixels * 100),
         "excluded_pct":            float(protected_pixels / total_pixels * 100),
     }
 
-    # Save GeoTIFF
-    PATHS['api_results_dir'].mkdir(parents=True, exist_ok=True)
+    # Save GeoTIFF locally
+    PATHS["api_results_dir"].mkdir(parents=True, exist_ok=True)
     analysis_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-    tif_path    = PATHS['api_results_dir'] / f"suitability_{analysis_id}.tif"
-    profile     = LAYERS_PROFILE.copy()
-    profile.update(dtype=rasterio.float32, compress='lzw', nodata=0)
-    with rasterio.open(tif_path, 'w', **profile) as dst:
+    tif_path    = PATHS["api_results_dir"] / f"suitability_{analysis_id}.tif"
+
+    profile = LAYERS_PROFILE.copy()
+    profile.update(dtype=rasterio.float32, compress="lzw", nodata=0)
+    with rasterio.open(tif_path, "w", **profile) as dst:
         dst.write(suitability, 1)
+
+    # Upload result back to S3 (best-effort, non-blocking)
+    upload_result_to_s3(tif_path, analysis_id)
 
     metadata = {
         "analysis_id":         analysis_id,
-        "county":              CONFIG['county'],
+        "county":              CONFIG["county"],
         "raster_bounds":       RASTER_BOUNDS,
         "weights":             weights_dict,
         "statistics":          stats,
@@ -279,12 +446,12 @@ async def run_analysis(request: SuitabilityRequest):
         "constraints_applied": request.apply_constraints,
         "timestamp":           datetime.now().isoformat(),
     }
-    with open(PATHS['api_results_dir'] / f"metadata_{analysis_id}.json", 'w') as f:
+    with open(PATHS["api_results_dir"] / f"metadata_{analysis_id}.json", "w") as f:
         json.dump(metadata, f, indent=2)
 
     return SuitabilityResponse(
         analysis_id=analysis_id,
-        county=CONFIG['display_name'],
+        county=CONFIG["display_name"],
         raster_bounds=RASTER_BOUNDS,
         suitability_range={"min": stats["min"], "max": stats["max"]},
         statistics=stats,
@@ -297,54 +464,37 @@ async def run_analysis(request: SuitabilityRequest):
 @app.get("/map-image/{analysis_id}")
 async def get_map_image(analysis_id: str):
     """Render suitability GeoTIFF as transparent RGBA PNG for Leaflet."""
-    tif_path = PATHS['api_results_dir'] / f"suitability_{analysis_id}.tif"
+    tif_path = PATHS["api_results_dir"] / f"suitability_{analysis_id}.tif"
     if not tif_path.exists():
         raise HTTPException(status_code=404, detail=f"Analysis '{analysis_id}' not found")
 
     with rasterio.open(tif_path) as src:
         data = src.read(1).astype(np.float32)
 
-    h, w  = data.shape
+    h, w = data.shape
     rgba  = np.zeros((h, w, 4), dtype=np.uint8)
     valid = data > 0
-    s     = data  # raw scores 0-100
+    s     = data
 
-    # Colour bands matching classification thresholds:
-    # <30  → red    #ef5350  (239, 83, 80)
-    # 30-50 → amber  #ffa726  (255, 167, 38)
-    # 50-70 → light green #66bb6a (102, 187, 106)
-    # >=70  → dark green #2e7d32 (46, 125, 50)
-    r = np.select(
-        [s < 30, s < 50, s < 70, s >= 70],
-        [239,     255,    102,     46],
-        default=0
-    )
-    g = np.select(
-        [s < 30, s < 50, s < 70, s >= 70],
-        [83,      167,    187,     125],
-        default=0
-    )
-    b = np.select(
-        [s < 30, s < 50, s < 70, s >= 70],
-        [80,      38,     106,     50],
-        default=0
-    )
+    r = np.select([s < 30, s < 50, s < 70, s >= 70], [239, 255, 102,  46], default=0)
+    g = np.select([s < 30, s < 50, s < 70, s >= 70], [ 83, 167, 187, 125], default=0)
+    b = np.select([s < 30, s < 50, s < 70, s >= 70], [ 80,  38, 106,  50], default=0)
 
     rgba[valid, 0] = np.clip(r[valid], 0, 255).astype(np.uint8)
     rgba[valid, 1] = np.clip(g[valid], 0, 255).astype(np.uint8)
     rgba[valid, 2] = np.clip(b[valid], 0, 255).astype(np.uint8)
-    rgba[valid, 3] = 255  # Opaque where valid, transparent where 0
+    rgba[valid, 3] = 255
 
-    img = Image.fromarray(rgba, mode='RGBA')
+    img = Image.fromarray(rgba, mode="RGBA")
     buf = io.BytesIO()
-    img.save(buf, format='PNG')
+    img.save(buf, format="PNG")
     buf.seek(0)
     return Response(content=buf.read(), media_type="image/png")
 
 
 @app.get("/results/{analysis_id}")
 async def get_results(analysis_id: str):
-    path = PATHS['api_results_dir'] / f"metadata_{analysis_id}.json"
+    path = PATHS["api_results_dir"] / f"metadata_{analysis_id}.json"
     if not path.exists():
         raise HTTPException(status_code=404, detail="Analysis not found")
     with open(path) as f:
@@ -353,14 +503,36 @@ async def get_results(analysis_id: str):
 
 @app.get("/download/{analysis_id}")
 async def download_geotiff(analysis_id: str):
-    tif_path = PATHS['api_results_dir'] / f"suitability_{analysis_id}.tif"
+    tif_path = PATHS["api_results_dir"] / f"suitability_{analysis_id}.tif"
     if not tif_path.exists():
         raise HTTPException(status_code=404, detail="Analysis not found")
     return FileResponse(
         path=str(tif_path),
         media_type="image/tiff",
-        filename=f"{CONFIG['county']}_suitability_{analysis_id}.tif"
+        filename=f"{CONFIG['county']}_suitability_{analysis_id}.tif",
     )
+
+
+@app.post("/admin/reload")
+async def reload_layers():
+    """
+    Re-sync from S3 and reload normalized layers into memory.
+    Useful after uploading new data without restarting the service.
+    """
+    global NORMALIZED_LAYERS, LAYERS_PROFILE, RASTER_BOUNDS
+    NORMALIZED_LAYERS = {}
+    LAYERS_PROFILE    = None
+    RASTER_BOUNDS     = None
+
+    ok = sync_county_from_s3()
+    if not ok:
+        raise HTTPException(status_code=500, detail="S3 sync failed")
+
+    load_layers()
+    return {
+        "status":        "reloaded",
+        "layers_loaded": len(NORMALIZED_LAYERS),
+    }
 
 
 if __name__ == "__main__":

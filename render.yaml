@@ -3,18 +3,18 @@ services:
     name: suitability-engine-api
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn src.api:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: SUITABILITY_DATA_DIR
         value: /tmp/suitability-engine
       - key: ACTIVE_COUNTY
-        value: bungoma              # change to whichever county you want live
+        value: kitui              # change to whichever county you want live
       - key: AWS_S3_BUCKET
         value: suitability-engine
       - key: AWS_DEFAULT_REGION
         value: eu-north-1
       - key: AWS_ACCESS_KEY_ID
-        sync: false                 # set manually in Render dashboard (secret)
+        sync: false               # set manually in Render dashboard (secret)
       - key: AWS_SECRET_ACCESS_KEY
-        sync: false                 # set manually in Render dashboard (secret)
+        sync: false               # set manually in Render dashboard (secret)
