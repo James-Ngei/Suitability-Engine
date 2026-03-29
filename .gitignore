@@ -1,0 +1,12 @@
+venv/
+node_modules/
+__pycache__/
+
+*.pbf
+*.osm
+*.geojson
+*.gpkg
+*.shp
+*.db
+
+data/
