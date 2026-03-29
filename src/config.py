@@ -4,46 +4,62 @@ config.py
 Loads the active county configuration from config/active_county.txt.
 All pipeline scripts import from here — no hardcoded county names anywhere else.
 
-On Render (or any deployed environment), set:
-    SUITABILITY_DATA_DIR=/tmp/suitability-engine
-    ACTIVE_COUNTY=bungoma          ← overrides active_county.txt
-    AWS_S3_BUCKET=suitability-engine
-    AWS_ACCESS_KEY_ID=...
-    AWS_SECRET_ACCESS_KEY=...
-    AWS_DEFAULT_REGION=eu-north-1
+Key distinction:
+  CONFIG_DIR  — the config/ folder in the repo (JSON files + active_county.txt)
+                Always resolved relative to THIS file, so it works both locally
+                and on Render where the repo is checked out to /opt/render/project/src.
+
+  BASE_DIR    — where runtime DATA lives (rasters, results, etc.)
+                Locally:   ~/suitability-engine
+                On Render: /tmp/suitability-engine  (set SUITABILITY_DATA_DIR)
+
+Environment variables:
+    SUITABILITY_DATA_DIR   — override runtime data directory
+    ACTIVE_COUNTY          — override active_county.txt (required on Render)
+    AWS_S3_BUCKET          — S3 bucket name
+    AWS_ACCESS_KEY_ID      — set in Render dashboard (secret)
+    AWS_SECRET_ACCESS_KEY  — set in Render dashboard (secret)
+    AWS_DEFAULT_REGION     — e.g. eu-north-1
 """
 
 import os
 import json
 from pathlib import Path
 
-# ── Base directory ─────────────────────────────────────────────────────────────
-# Locally:  ~/suitability-engine (default)
-# On Render: /tmp/suitability-engine  (set SUITABILITY_DATA_DIR env var)
+# ── Config directory: always relative to this file (lives in the repo) ─────────
+# Locally:  <project_root>/config/
+# On Render: /opt/render/project/src/config/
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+
+# ── Data directory: runtime files (rasters, results) — NOT in the repo ─────────
+# Locally:  ~/suitability-engine/data/
+# On Render: /tmp/suitability-engine/data/  (ephemeral, populated from S3)
 _env_data_dir = os.environ.get("SUITABILITY_DATA_DIR")
-BASE_DIR    = Path(_env_data_dir) if _env_data_dir else Path.home() / "suitability-engine"
-CONFIG_DIR  = BASE_DIR / "config"
-ACTIVE_FILE = CONFIG_DIR / "active_county.txt"
+BASE_DIR      = Path(_env_data_dir) if _env_data_dir else Path.home() / "suitability-engine"
+
 SHARED_DIR  = BASE_DIR / "data" / "shared"
 
 
 def get_active_county() -> str:
-    """Read which county is currently active.
-    Env var ACTIVE_COUNTY takes priority over active_county.txt."""
+    """
+    Read which county is currently active.
+    Priority: ACTIVE_COUNTY env var > active_county.txt in repo config dir.
+    """
     env_county = os.environ.get("ACTIVE_COUNTY")
     if env_county:
         return env_county.strip().lower()
 
-    if not ACTIVE_FILE.exists():
+    active_file = CONFIG_DIR / "active_county.txt"
+    if not active_file.exists():
         raise FileNotFoundError(
             f"No active county set.\n"
-            f"Create {ACTIVE_FILE} with a county name, e.g.:\n"
-            f"  echo 'kitui' > {ACTIVE_FILE}\n"
-            f"Or set the ACTIVE_COUNTY environment variable."
+            f"Either set the ACTIVE_COUNTY environment variable, or create:\n"
+            f"  {active_file}\n"
+            f"with a county name, e.g.:  echo 'kitui' > {active_file}"
         )
-    county = ACTIVE_FILE.read_text().strip().lower()
+    county = active_file.read_text().strip().lower()
     if not county:
-        raise ValueError(f"{ACTIVE_FILE} is empty — write a county name into it.")
+        raise ValueError(f"{active_file} is empty — write a county name into it.")
     return county
 
 
@@ -57,10 +73,11 @@ def load_config(county: str = None) -> dict:
 
     config_path = CONFIG_DIR / f"{county}.json"
     if not config_path.exists():
+        available = [p.stem for p in CONFIG_DIR.glob("*.json")]
         raise FileNotFoundError(
             f"No config found for '{county}'.\n"
             f"Expected: {config_path}\n"
-            f"Available: {[p.stem for p in CONFIG_DIR.glob('*.json')]}"
+            f"Available: {available}"
         )
 
     with open(config_path) as f:
@@ -87,8 +104,8 @@ def _resolve_paths(config: dict) -> dict:
         "sensitivity_dir":  county_dir / "sensitivity",
         "constraint_mask":  county_dir / "preprocessed" / f"{county}_constraints_mask.tif",
 
-        "shared_dir":      SHARED_DIR,
-        "protected_areas": SHARED_DIR / "protected_areas_kenya.gpkg",
+        "shared_dir":       SHARED_DIR,
+        "protected_areas":  SHARED_DIR / "protected_areas_kenya.gpkg",
 
         "layers": {
             name: county_dir / "preprocessed" / fname
@@ -137,4 +154,5 @@ if __name__ == "__main__":
     print(f"Resolution    : {config['resolution']}°")
     print(f"Layers        : {list(config['layers'].keys())}")
     print(f"Available     : {list_counties()}")
+    print(f"CONFIG_DIR    : {CONFIG_DIR}")
     print(f"BASE_DIR      : {BASE_DIR}")
