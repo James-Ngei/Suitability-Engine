@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.css": "/suitability-engine/static/css/main.1ecb5240.css",
-    "main.js": "/suitability-engine/static/js/main.54fa4712.js",
-    "index.html": "/suitability-engine/index.html",
-    "main.1ecb5240.css.map": "/suitability-engine/static/css/main.1ecb5240.css.map",
-    "main.54fa4712.js.map": "/suitability-engine/static/js/main.54fa4712.js.map"
+    "main.css": "/Suitability-Engine/static/css/main.1ecb5240.css",
+    "main.js": "/Suitability-Engine/static/js/main.54fa4712.js",
+    "index.html": "/Suitability-Engine/index.html",
+    "main.1ecb5240.css.map": "/Suitability-Engine/static/css/main.1ecb5240.css.map",
+    "main.54fa4712.js.map": "/Suitability-Engine/static/js/main.54fa4712.js.map"
   },
   "entrypoints": [
     "static/css/main.1ecb5240.css",
