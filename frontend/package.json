@@ -1,7 +1,7 @@
 {
   "name": "suitability-dashboard",
   "version": "1.0.0",
-  "homepage": "https://James-Ngei.github.io/suitability-engine",
+  "homepage": "https://James-Ngei.github.io/Suitability-Engine",
   "description": "Cotton Suitability Analysis Dashboard",
   "private": true,
   "dependencies": {
