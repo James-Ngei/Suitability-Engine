@@ -2,7 +2,7 @@ import React from 'react';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://https://suitability-engine.onrender.com';
 
 function FitToBoundary({ geojson }) {
   const map = useMap();

@@ -5,7 +5,7 @@ import WeightControls from './components/WeightControls';
 import Statistics from './components/Statistics';
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://suitability-engine.onrender.com';
 
 function App() {
   const [countyInfo,       setCountyInfo]       = useState(null);
