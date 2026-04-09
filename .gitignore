@@ -8,5 +8,6 @@ __pycache__/
 *.gpkg
 *.shp
 *.db
+*.tif
 
 data/

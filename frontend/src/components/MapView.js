@@ -2,8 +2,6 @@ import React from 'react';
 import { MapContainer, TileLayer, ImageOverlay, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 
-const API_BASE = 'https://suitability-engine.onrender.com';
-
 function FitToBoundary({ geojson }) {
   const map = useMap();
   React.useEffect(() => {
@@ -19,11 +17,11 @@ function FitToBoundary({ geojson }) {
   return null;
 }
 
-function SuitabilityOverlay({ result }) {
+function SuitabilityOverlay({ result, apiBaseUrl }) {
   if (!result?.analysis_id || !result?.raster_bounds) return null;
   return (
     <ImageOverlay
-      url={`${API_BASE}/map-image/${result.analysis_id}?t=${Date.now()}`}
+      url={`${apiBaseUrl}/map-image/${result.analysis_id}?t=${Date.now()}`}
       bounds={result.raster_bounds}
       opacity={0.78}
       zIndex={10}
@@ -120,7 +118,7 @@ function Legend({ result, countyInfo, boundaryLoaded }) {
   );
 }
 
-function MapView({ analysisResult, countyInfo }) {
+function MapView({ analysisResult, countyInfo, apiBaseUrl }) {
   const [boundaryGeoJSON, setBoundaryGeoJSON] = React.useState(null);
   const [boundaryError,   setBoundaryError]   = React.useState(false);
 
@@ -128,7 +126,8 @@ function MapView({ analysisResult, countyInfo }) {
   const zoom   = countyInfo?.map_zoom   ?? 8;
 
   React.useEffect(() => {
-    fetch(`${API_BASE}/boundary-geojson`)
+    if (!apiBaseUrl) return;
+    fetch(`${apiBaseUrl}/boundary-geojson`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
@@ -138,7 +137,7 @@ function MapView({ analysisResult, countyInfo }) {
         console.warn('Could not load boundary:', err);
         setBoundaryError(true);
       });
-  }, []);
+  }, [apiBaseUrl]);
 
   return (
     <div className="map-container">
@@ -152,7 +151,7 @@ function MapView({ analysisResult, countyInfo }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         <FitToBoundary geojson={boundaryGeoJSON} />
-        <SuitabilityOverlay result={analysisResult} />
+        <SuitabilityOverlay result={analysisResult} apiBaseUrl={apiBaseUrl} />
         <BoundaryOverlay geojson={boundaryGeoJSON} />
       </MapContainer>
 

@@ -21,6 +21,8 @@ import numpy as np
 import rasterio
 from rasterio.warp import reproject, Resampling
 from pathlib import Path
+from map_renderer import render_all
+from report_writer import build_report
 import json
 from datetime import datetime
 from PIL import Image
@@ -32,6 +34,7 @@ import logging
 
 logger = logging.getLogger("suitability-api")
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("botocore.credentials").setLevel(logging.WARNING)
 
 sys.path.append(str(Path(__file__).parent))
 from config import load_config
@@ -273,15 +276,18 @@ async def root():
         "crop":    CONFIG["crop"],
         "version": "2.1.0",
         "endpoints": {
-            "GET  /health":                  "Health check",
-            "GET  /county":                  "Active county info",
-            "GET  /criteria":                "Analysis criteria",
-            "GET  /boundary-geojson":        "County boundary GeoJSON",
-            "POST /analyze":                 "Run suitability analysis",
-            "GET  /map-image/{analysis_id}": "PNG overlay for Leaflet",
-            "GET  /results/{analysis_id}":   "Analysis metadata",
-            "GET  /download/{analysis_id}":  "Download GeoTIFF",
-            "POST /admin/reload":            "Re-sync S3 and reload layers",
+            "GET  /health":                           "Health check",
+            "GET  /county":                           "Active county info",
+            "GET  /criteria":                         "Analysis criteria",
+            "GET  /boundary-geojson":                 "County boundary GeoJSON",
+            "POST /analyze":                          "Run suitability analysis",
+            "GET  /map-image/{analysis_id}":          "PNG overlay for Leaflet",
+            "GET  /report-assets/{id}/{asset}":       "Rendered map or chart PNG",
+            "POST /report/{analysis_id}":             "Generate PDF report",
+            "POST /render/{analysis_id}":             "Re-render report assets",
+            "GET  /results/{analysis_id}":            "Analysis metadata JSON",
+            "GET  /download/{analysis_id}":           "Download GeoTIFF",
+            "POST /admin/reload":                     "Re-sync S3 and reload layers",
         },
     }
 
@@ -438,6 +444,15 @@ async def run_analysis(request: SuitabilityRequest):
     # Upload result back to S3 (best-effort, non-blocking)
     upload_result_to_s3(tif_path, analysis_id)
 
+    # Render all map and chart assets for this analysis
+    rendered = render_all(
+        analysis_id    = analysis_id,
+        classification = classification,
+        weights        = weights_dict,
+        config         = CONFIG,
+        paths          = PATHS,
+    )
+
     metadata = {
         "analysis_id":         analysis_id,
         "county":              CONFIG["county"],
@@ -447,6 +462,7 @@ async def run_analysis(request: SuitabilityRequest):
         "classification":      classification,
         "constraints_applied": request.apply_constraints,
         "timestamp":           datetime.now().isoformat(),
+        "rendered_assets":     {k: str(v) for k, v in rendered.items() if v},
     }
     with open(PATHS["api_results_dir"] / f"metadata_{analysis_id}.json", "w") as f:
         json.dump(metadata, f, indent=2)
@@ -492,6 +508,146 @@ async def get_map_image(analysis_id: str):
     img.save(buf, format="PNG")
     buf.seek(0)
     return Response(content=buf.read(), media_type="image/png")
+
+
+@app.get("/report-assets/{analysis_id}/{asset_name}")
+async def get_report_asset(analysis_id: str, asset_name: str):
+    """
+    Serve a rendered report asset (map PNG or chart PNG) by name.
+
+    asset_name options:
+      suitability_map       — main 4-class suitability map
+      criteria_grid         — 2×N grid of individual criterion layers
+      classification_chart  — horizontal bar chart of class percentages
+      weight_chart          — horizontal bar chart of criterion weights
+    """
+    filename_map = {
+        "suitability_map":      f"suitability_map_{analysis_id}.png",
+        "criteria_grid":        f"criteria_grid_{analysis_id}.png",
+        "classification_chart": f"classification_chart_{analysis_id}.png",
+        "weight_chart":         f"weight_chart_{analysis_id}.png",
+    }
+    if asset_name not in filename_map:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown asset '{asset_name}'. "
+                   f"Choose from: {list(filename_map)}"
+        )
+
+    asset_path = PATHS["api_results_dir"] / filename_map[asset_name]
+    if not asset_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Asset '{asset_name}' not yet rendered for analysis '{analysis_id}'. "
+                   f"POST /render/{analysis_id} to generate it."
+        )
+
+    return FileResponse(path=str(asset_path), media_type="image/png")
+
+
+@app.post("/report/{analysis_id}")
+async def generate_report(analysis_id: str, depth: str = "full"):
+    """
+    Generate a PDF report for a completed analysis.
+
+    Query params:
+      depth = summary  →  2 pages: map, stats, classification, narrative
+      depth = full     →  4 pages: adds criteria grid, methodology section (default)
+
+    The report is saved alongside the GeoTIFF and returned as a download.
+    LLM provider is controlled via the LLM_PROVIDER environment variable
+    (groq | gemini | anthropic | ollama). Falls back to a template if unset.
+    """
+    if depth not in ("summary", "full"):
+        raise HTTPException(
+            status_code=400,
+            detail="depth must be 'summary' or 'full'"
+        )
+
+    meta_path = PATHS["api_results_dir"] / f"metadata_{analysis_id}.json"
+    if not meta_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Analysis '{analysis_id}' not found. Run POST /analyze first."
+        )
+
+    with open(meta_path) as f:
+        metadata = json.load(f)
+
+    # Resolve rendered asset paths (stored as strings in metadata)
+    rendered = {
+        k: Path(v)
+        for k, v in metadata.get("rendered_assets", {}).items()
+    }
+
+    # If assets are missing (e.g. old analysis), render them now
+    if not rendered:
+        logger.info(f"No rendered assets found for {analysis_id} — rendering now")
+        rendered = render_all(
+            analysis_id    = analysis_id,
+            classification = metadata["classification"],
+            weights        = metadata["weights"],
+            config         = CONFIG,
+            paths          = PATHS,
+        )
+        metadata["rendered_assets"] = {k: str(v) for k, v in rendered.items() if v}
+        with open(meta_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+
+    pdf_path = build_report(
+        analysis_id = analysis_id,
+        metadata    = metadata,
+        rendered    = rendered,
+        config      = CONFIG,
+        paths       = PATHS,
+        depth       = depth,
+    )
+
+    county_slug = CONFIG["county"]
+    filename    = f"{county_slug}_suitability_{analysis_id}_{depth}.pdf"
+
+    return FileResponse(
+        path       = str(pdf_path),
+        media_type = "application/pdf",
+        filename   = filename,
+    )
+
+
+@app.post("/render/{analysis_id}")
+async def render_report_assets(analysis_id: str):
+    """
+    (Re)render all report assets (maps + charts) for an existing analysis.
+    Useful if the analysis ran before map_renderer was added, or to
+    regenerate after a config or styling change.
+    """
+    tif_path = PATHS["api_results_dir"] / f"suitability_{analysis_id}.tif"
+    if not tif_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Analysis '{analysis_id}' not found."
+        )
+
+    meta_path = PATHS["api_results_dir"] / f"metadata_{analysis_id}.json"
+    with open(meta_path) as f:
+        metadata = json.load(f)
+
+    rendered = render_all(
+        analysis_id    = analysis_id,
+        classification = metadata["classification"],
+        weights        = metadata["weights"],
+        config         = CONFIG,
+        paths          = PATHS,
+    )
+
+    # Persist updated asset paths back to metadata
+    metadata["rendered_assets"] = {k: str(v) for k, v in rendered.items() if v}
+    with open(meta_path, "w") as f:
+        json.dump(metadata, f, indent=2)
+
+    return {
+        "analysis_id": analysis_id,
+        "rendered":    list(rendered.keys()),
+    }
 
 
 @app.get("/results/{analysis_id}")
