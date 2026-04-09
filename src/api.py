@@ -306,6 +306,9 @@ async def health_check():
         "s3_bucket":          os.environ.get("AWS_S3_BUCKET", "not configured"),
     }
 
+@app.get("/ping")
+async def ping():
+    return {"status": "ok"}
 
 @app.get("/county")
 async def get_county_info():
