@@ -21,8 +21,8 @@ import numpy as np
 import rasterio
 from rasterio.warp import reproject, Resampling
 from pathlib import Path
-from map_renderer import render_all
-from report_writer import build_report
+from src.map_renderer import render_all
+from src.report_writer import build_report
 import json
 from datetime import datetime
 from PIL import Image
