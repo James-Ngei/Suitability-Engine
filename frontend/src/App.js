@@ -25,6 +25,8 @@ function App() {
   const [reportGenerating, setReportGenerating] = useState(false);
   const [reportError,      setReportError]      = useState(null);
 
+  const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+
   useEffect(() => {
     Promise.all([
       axios.get(`${API_BASE_URL}/county`),
@@ -210,8 +212,28 @@ function App() {
                       title="Close (Esc)">✕</button>
                   </div>
                 </div>
-                <iframe src={pdfBlobUrl} title="Suitability Report"
-                  className="report-overlay-iframe" type="application/pdf" />
+                {isMobile ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flex: 1, flexDirection: 'column', gap: '1rem',
+                    background: '#f4f4f4',
+                  }}>
+                    <div style={{ fontSize: '0.85rem', color: '#5a7a42' }}>
+                      PDF preview is not supported on mobile browsers.
+                    </div>
+                    <a href={pdfBlobUrl} target="_blank" rel="noreferrer"
+                      style={{
+                        padding: '0.8rem 1.5rem', background: '#2d5a1b', color: 'white',
+                        borderRadius: '6px', textDecoration: 'none', fontSize: '0.9rem',
+                        fontWeight: 600,
+                      }}>
+                      Open Report
+                    </a>
+                  </div>
+                ) : (
+                  <iframe src={pdfBlobUrl} title="Suitability Report"
+                    className="report-overlay-iframe" type="application/pdf" />
+                )}
               </div>
             </div>
           )}
