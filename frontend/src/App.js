@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import MapView from './components/MapView';
 import WeightControls from './components/WeightControls';
@@ -26,6 +26,7 @@ function App() {
   const [reportError,      setReportError]      = useState(null);
 
   const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent);
+  const reportPanelRef = useRef(null); // ← added
 
   useEffect(() => {
     Promise.all([
@@ -106,6 +107,10 @@ function App() {
       setPdfBlobUrl(blobUrl);
       setPdfFilename(filename);
       setReportOverlay(true);
+      // ← added: scroll right panel into view after report is ready
+      setTimeout(() => {
+        reportPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
     } catch (err) {
       console.error('Report error:', err);
       setReportError(err.message || 'Report generation failed');
@@ -239,7 +244,8 @@ function App() {
           )}
         </div>
 
-        <div className="right-panel">
+        {/* ← ref added for scroll-into-view */}
+        <div className="right-panel" ref={reportPanelRef}>
           <Statistics result={analysisResult} />
           <ReportPanel
             hasAnalysis={hasAnalysis}
@@ -249,7 +255,12 @@ function App() {
             error={reportError}
             pdfReady={!!pdfBlobUrl}
             onGenerate={handleGenerateReport}
-            onView={() => setReportOverlay(true)}
+            onView={() => {
+              setReportOverlay(true);
+              setTimeout(() => {
+                reportPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }, 100);
+            }}
             onDownload={handleDownload}
           />
         </div>
@@ -268,7 +279,12 @@ function App() {
             {pdfBlobUrl && (
               <>
                 <button className="footer-report-btn footer-view-btn"
-                  onClick={() => setReportOverlay(true)}>
+                  onClick={() => {
+                    setReportOverlay(true);
+                    setTimeout(() => {
+                      reportPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
+                  }}>
                   View report
                 </button>
                 <button className="footer-report-btn footer-download-btn"
