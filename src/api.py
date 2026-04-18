@@ -215,6 +215,8 @@ def load_layers():
     if RASTER_BOUNDS:
         logger.info(f"   Raster bounds: {RASTER_BOUNDS}")
 
+from src.report_writer import build_rag_store
+build_rag_store()   # builds TF-IDF store from data/rag_docs/
 
 @app.on_event("startup")
 async def startup_event():
