@@ -26,14 +26,8 @@ import os
 import json
 from pathlib import Path
 
-# ── Config directory: always relative to this file (lives in the repo) ─────────
-# Locally:  <project_root>/config/
-# On Render: /opt/render/project/src/config/
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 
-# ── Data directory: runtime files (rasters, results) — NOT in the repo ─────────
-# Locally:  ~/suitability-engine/data/
-# On Render: /tmp/suitability-engine/data/  (ephemeral, populated from S3)
 _env_data_dir = os.environ.get("SUITABILITY_DATA_DIR")
 BASE_DIR      = Path(_env_data_dir) if _env_data_dir else Path.home() / "suitability-engine"
 

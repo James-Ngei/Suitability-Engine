@@ -13,4 +13,7 @@ boto3
 matplotlib-scalebar>=0.8.0
 reportlab>=4.0.0
 scikit-learn
-groq
+groq 
+planetary-computer
+pystac-client
+requests

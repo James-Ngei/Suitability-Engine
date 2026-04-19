@@ -75,8 +75,12 @@ def main():
             print(f"  ⚠️  Missing source: {src_path.name} — skipping")
             continue
 
+        CATEGORICAL = {'soil'}
+
         with rasterio.open(src_path) as src:
-            destination = np.zeros((height, width), dtype=np.float32)
+            src_nodata = src.nodata if src.nodata is not None else -9999
+            resamp = Resampling.nearest if name in CATEGORICAL else Resampling.bilinear
+            destination = np.full((height, width), src_nodata, dtype=np.float32)
             reproject(
                 source=rasterio.band(src, 1),
                 destination=destination,
@@ -84,8 +88,12 @@ def main():
                 src_crs=src.crs,
                 dst_transform=target_transform,
                 dst_crs='EPSG:4326',
-                resampling=Resampling.bilinear
+                resampling=resamp,
+                src_nodata=src_nodata,
+                dst_nodata=src_nodata,
             )
+            # Convert nodata to 0 after reproject so downstream pipeline is consistent
+            destination[destination == src_nodata] = 0
             profile = src.profile.copy()
             profile.update(
                 height=height, width=width,

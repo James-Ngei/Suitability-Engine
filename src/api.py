@@ -23,6 +23,9 @@ from rasterio.warp import reproject, Resampling
 from pathlib import Path
 from src.map_renderer import render_all
 from src.report_writer import build_report
+from src.report_writer import build_rag_store
+from src.pc_fetcher import fetch_all_layers, layers_are_cached
+from src.report_writer import build_rag_store
 import json
 from datetime import datetime
 from PIL import Image
@@ -215,24 +218,50 @@ def load_layers():
     if RASTER_BOUNDS:
         logger.info(f"   Raster bounds: {RASTER_BOUNDS}")
 
-from src.report_writer import build_rag_store
-build_rag_store()   # builds TF-IDF store from data/rag_docs/
-
 @app.on_event("startup")
 async def startup_event():
     logger.info("=" * 55)
     logger.info(f"  Starting: {CONFIG['display_name']} — {CONFIG['crop']}")
     logger.info("=" * 55)
-
-    # 1. Pull data from S3
-    logger.info("── Syncing from S3 ──────────────────────────────────")
-    ok = sync_county_from_s3()
-    if not ok:
-        logger.error("S3 sync failed — API may have no data to serve.")
-
-    # 2. Load layers into memory
-    logger.info("── Loading normalized layers ─────────────────────────")
+ 
+    # 1. Fetch raw layers from Planetary Computer (skips if cached)
+    logger.info("── Fetching layers (Planetary Computer) ─────────────────")
+    try:
+        if not layers_are_cached(CONFIG):
+            logger.info("   Cache miss — fetching from Planetary Computer...")
+            fetch_all_layers(CONFIG)
+ 
+            # Run preprocessing pipeline on freshly fetched data
+            logger.info("── Running preprocessing pipeline ────────────────────")
+            import subprocess, sys
+            for script in [
+                "src/preprocess.py",
+                "src/realign_to_boundary.py",
+                "src/normalize.py",
+                "src/clip_to_boundary.py",
+            ]:
+                logger.info(f"   Running {script}...")
+                result = subprocess.run(
+                    [sys.executable, script],
+                    capture_output=True, text=True
+                )
+                if result.returncode != 0:
+                    logger.error(f"   {script} failed:\n{result.stderr}")
+                else:
+                    logger.info(f"   {script} done")
+        else:
+            logger.info("   All raw layers cached — skipping fetch")
+    except Exception as e:
+        logger.error(f"PC fetch/preprocess failed: {e}")
+        logger.warning("Falling back to existing normalized layers if available")
+ 
+    # 2. Load normalized layers into memory
+    logger.info("── Loading normalized layers ─────────────────────────────")
     load_layers()
+ 
+    # 3. Build RAG store for report narratives
+    logger.info("── Building RAG store ────────────────────────────────────")
+    build_rag_store()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -679,22 +708,37 @@ async def download_geotiff(analysis_id: str):
 @app.post("/admin/reload")
 async def reload_layers():
     """
-    Re-sync from S3 and reload normalized layers into memory.
-    Useful after uploading new data without restarting the service.
+    Re-fetch from Planetary Computer, re-run pipeline, reload layers.
+    Pass ?force=true to re-fetch even if local cache exists.
     """
+    from fastapi import Query
     global NORMALIZED_LAYERS, LAYERS_PROFILE, RASTER_BOUNDS
     NORMALIZED_LAYERS = {}
     LAYERS_PROFILE    = None
     RASTER_BOUNDS     = None
-
-    ok = sync_county_from_s3()
-    if not ok:
-        raise HTTPException(status_code=500, detail="S3 sync failed")
-
+ 
+    try:
+        fetch_all_layers(CONFIG, force=True)
+ 
+        import subprocess, sys
+        for script in [
+            "src/preprocess.py",
+            "src/realign_to_boundary.py",
+            "src/normalize.py",
+            "src/clip_to_boundary.py",
+        ]:
+            subprocess.run([sys.executable, script], check=True)
+ 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fetch/pipeline failed: {e}")
+ 
     load_layers()
+    build_rag_store()
+ 
     return {
         "status":        "reloaded",
         "layers_loaded": len(NORMALIZED_LAYERS),
+        "rag_available": True,
     }
 
 

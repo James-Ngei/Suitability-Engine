@@ -345,21 +345,17 @@ def _build_prompt(stats: dict, classification: dict,
         f"- Excluded (protected): {classification.get('excluded_pct', 0):.1f}%\n"
         f"- Most influential criterion: {top_criterion} ({weights.get(top_criterion, 0)*100:.0f}% weight)\n\n"
         f"CRITERIA USED:\n{criteria_str}\n\n"
-        f"Write exactly 3 paragraphs:\n\n"
-        f"Paragraph 1 — OVERALL ASSESSMENT: Interpret what a mean score of "
-        f"{stats.get('mean', 0):.1f}/100 means for {crop} viability in {county}. "
-        f"Reference the {suitable_pct:.1f}% suitable area figure and explain "
-        f"what this implies for county-level agricultural planning. Compare to "
-        f"known {crop} growing requirements.\n\n"
-        f"Paragraph 2 — SPATIAL INTERPRETATION: Explain the spatial distribution "
-        f"— why {top_criterion} is the dominant driver, what landscapes or "
-        f"sub-regions in {county} are likely to correspond to the highly suitable "
-        f"zones, and what constraints limit the {classification.get('not_suitable_pct', 0):.1f}% "
-        f"not-suitable areas. Reference the actual threshold values in the criteria.\n\n"
-        f"Paragraph 3 — RECOMMENDATIONS: Provide 3-4 specific, actionable steps "
-        f"for county agriculture officers — including prioritisation of the highly "
-        f"suitable zones, data quality caveats to communicate to farmers, and what "
-        f"complementary field assessments should follow this desk analysis."
+        f"Write exactly 3 paragraphs separated by a blank line. "
+        f"Each paragraph must be 4-5 sentences. "
+        f"Start each paragraph on a new line with no label or heading. "
+        f"Do not combine paragraphs. Do not use bullet points.\n\n"
+        f"Paragraph 1: Overall assessment — what {stats.get('mean',0):.1f}/100 "
+        f"means for {crop} viability in {county}, referencing the {suitable_pct:.1f}% suitable area.\n\n"
+        f"Paragraph 2: Spatial interpretation — which specific areas of {county} "
+        f"are highly suitable and why, driven by {top_criterion}. "
+        f"Reference actual threshold values.\n\n"
+        f"Paragraph 3: Exactly 3 numbered recommendations for county agriculture officers. "
+        f"Be specific — name zones, name data limitations, name next steps."
     )
 
 
@@ -941,22 +937,7 @@ def build_report(
     story.append(_score_cards(stats, styles))
     story.append(Spacer(1, 3 * mm))
 
-    chart_w   = CONTENT_W * 0.46
-    classif_w = CONTENT_W * 0.54
-    suit_chart = _img(rendered.get('classification_chart'), chart_w, 50 * mm)
-    classif_t  = _classification_table(classif, styles, available_width=classif_w - 4 * mm)
-
-    if suit_chart:
-        side_table = Table([[suit_chart, classif_t]], colWidths=[chart_w, classif_w])
-        side_table.setStyle(TableStyle([
-            ('VALIGN',       (0, 0), (-1, -1), 'TOP'),
-            ('LEFTPADDING',  (0, 0), (-1, -1), 0),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-            ('TOPPADDING',   (0, 0), (-1, -1), 0),
-        ]))
-        story.append(side_table)
-    else:
-        story.append(_classification_table(classif, styles))
+    story.append(_classification_table(classif, styles)) 
 
     # ── Narrative ──────────────────────────────────────────────────────────────
     story += _section('Interpretation', styles)
