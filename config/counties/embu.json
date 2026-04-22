@@ -1,0 +1,25 @@
+{
+  "county": "embu",
+  "display_name": "Embu County",
+  "country": "Kenya",
+  "map_center": [
+    -0.55,
+    37.6
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 37.18,
+    "south": -0.92,
+    "east": 37.97,
+    "north": -0.1
+  },
+  "osm_relation_id": 192782,
+  "layers": {
+    "elevation": "embu_elevation.tif",
+    "rainfall": "embu_rainfall.tif",
+    "temperature": "embu_temperature.tif",
+    "soil": "embu_soil.tif",
+    "slope": "embu_slope.tif"
+  }
+}

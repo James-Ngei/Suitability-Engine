@@ -1,0 +1,25 @@
+{
+  "county": "kwale",
+  "display_name": "Kwale County",
+  "country": "Kenya",
+  "map_center": [
+    -4.18,
+    39.37
+  ],
+  "map_zoom": 9,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 38.58,
+    "south": -4.72,
+    "east": 39.72,
+    "north": -3.52
+  },
+  "osm_relation_id": 192799,
+  "layers": {
+    "elevation": "kwale_elevation.tif",
+    "rainfall": "kwale_rainfall.tif",
+    "temperature": "kwale_temperature.tif",
+    "soil": "kwale_soil.tif",
+    "slope": "kwale_slope.tif"
+  }
+}

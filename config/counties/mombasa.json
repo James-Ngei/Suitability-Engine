@@ -1,0 +1,25 @@
+{
+  "county": "mombasa",
+  "display_name": "Mombasa County",
+  "country": "Kenya",
+  "map_center": [
+    -4.04,
+    39.67
+  ],
+  "map_zoom": 12,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 39.52,
+    "south": -4.18,
+    "east": 39.82,
+    "north": -3.88
+  },
+  "osm_relation_id": 192808,
+  "layers": {
+    "elevation": "mombasa_elevation.tif",
+    "rainfall": "mombasa_rainfall.tif",
+    "temperature": "mombasa_temperature.tif",
+    "soil": "mombasa_soil.tif",
+    "slope": "mombasa_slope.tif"
+  }
+}

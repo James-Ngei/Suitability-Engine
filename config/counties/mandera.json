@@ -1,0 +1,25 @@
+{
+  "county": "mandera",
+  "display_name": "Mandera County",
+  "country": "Kenya",
+  "map_center": [
+    3.95,
+    41.1
+  ],
+  "map_zoom": 8,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 40.0,
+    "south": 2.68,
+    "east": 41.9,
+    "north": 4.48
+  },
+  "osm_relation_id": 192804,
+  "layers": {
+    "elevation": "mandera_elevation.tif",
+    "rainfall": "mandera_rainfall.tif",
+    "temperature": "mandera_temperature.tif",
+    "soil": "mandera_soil.tif",
+    "slope": "mandera_slope.tif"
+  }
+}

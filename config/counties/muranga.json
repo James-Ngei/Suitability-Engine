@@ -1,0 +1,25 @@
+{
+  "county": "muranga",
+  "display_name": "Muranga County",
+  "country": "Kenya",
+  "map_center": [
+    -0.72,
+    37.05
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 36.7,
+    "south": -1.1,
+    "east": 37.45,
+    "north": -0.33
+  },
+  "osm_relation_id": 192809,
+  "layers": {
+    "elevation": "muranga_elevation.tif",
+    "rainfall": "muranga_rainfall.tif",
+    "temperature": "muranga_temperature.tif",
+    "soil": "muranga_soil.tif",
+    "slope": "muranga_slope.tif"
+  }
+}

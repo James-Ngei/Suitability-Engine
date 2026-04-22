@@ -1,0 +1,25 @@
+{
+  "county": "kirinyaga",
+  "display_name": "Kirinyaga County",
+  "country": "Kenya",
+  "map_center": [
+    -0.65,
+    37.33
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 37.03,
+    "south": -0.92,
+    "east": 37.63,
+    "north": -0.37
+  },
+  "osm_relation_id": 192793,
+  "layers": {
+    "elevation": "kirinyaga_elevation.tif",
+    "rainfall": "kirinyaga_rainfall.tif",
+    "temperature": "kirinyaga_temperature.tif",
+    "soil": "kirinyaga_soil.tif",
+    "slope": "kirinyaga_slope.tif"
+  }
+}

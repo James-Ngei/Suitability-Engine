@@ -1,0 +1,25 @@
+{
+  "county": "kitui",
+  "display_name": "Kitui County",
+  "country": "Kenya",
+  "map_center": [
+    -1.37,
+    38.01
+  ],
+  "map_zoom": 9,
+  "resolution": 0.01,
+  "bbox": {
+    "west": 37.17,
+    "south": -3.12,
+    "east": 39.65,
+    "north": 0.4
+  },
+  "osm_relation_id": 192798,
+  "layers": {
+    "elevation": "kitui_elevation.tif",
+    "rainfall": "kitui_rainfall.tif",
+    "temperature": "kitui_temperature.tif",
+    "soil": "kitui_soil.tif",
+    "slope": "kitui_slope.tif"
+  }
+}

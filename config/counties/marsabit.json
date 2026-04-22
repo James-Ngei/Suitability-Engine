@@ -1,0 +1,25 @@
+{
+  "county": "marsabit",
+  "display_name": "Marsabit County",
+  "country": "Kenya",
+  "map_center": [
+    2.4,
+    37.8
+  ],
+  "map_zoom": 7,
+  "resolution": 0.01,
+  "bbox": {
+    "west": 36.5,
+    "south": 0.85,
+    "east": 39.5,
+    "north": 4.85
+  },
+  "osm_relation_id": 192805,
+  "layers": {
+    "elevation": "marsabit_elevation.tif",
+    "rainfall": "marsabit_rainfall.tif",
+    "temperature": "marsabit_temperature.tif",
+    "soil": "marsabit_soil.tif",
+    "slope": "marsabit_slope.tif"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "county": "baringo",
+  "display_name": "Baringo County",
+  "country": "Kenya",
+  "map_center": [
+    0.6,
+    35.97
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 35.35,
+    "south": -0.15,
+    "east": 36.7,
+    "north": 1.45
+  },
+  "osm_relation_id": 192779,
+  "layers": {
+    "elevation": "baringo_elevation.tif",
+    "rainfall": "baringo_rainfall.tif",
+    "temperature": "baringo_temperature.tif",
+    "soil": "baringo_soil.tif",
+    "slope": "baringo_slope.tif"
+  }
+}

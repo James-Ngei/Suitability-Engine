@@ -919,3 +919,176 @@ body {
   background: #2d5a1b;
   color: #d4eeac;
 }
+
+/* ── County Selector ─────────────────────────────────────────────────────── */
+
+.county-selector-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.65rem;
+  background: #ffffff;
+  border: 1.5px solid #c0d4a8;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.county-selector-btn:hover:not(:disabled) {
+  border-color: #3d7a22;
+  background: #f7fbf2;
+}
+
+.county-selector-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.county-selector-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1a2010;
+  flex: 1;
+}
+
+.county-selector-crop {
+  font-size: 0.68rem;
+  color: #7a8f68;
+  font-style: italic;
+}
+
+.county-selector-arrow {
+  font-size: 0.6rem;
+  color: #7a8f68;
+  flex-shrink: 0;
+}
+
+.county-dropdown {
+  position: relative;
+  background: #ffffff;
+  border: 1.5px solid #c0d4a8;
+  border-radius: 6px;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+
+.county-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.5rem 0.65rem;
+  background: #ffffff;
+  border: none;
+  border-bottom: 1px solid #eef2e8;
+  cursor: pointer;
+  transition: background 0.12s;
+  text-align: left;
+}
+
+.county-option:last-child { border-bottom: none; }
+.county-option:hover:not(:disabled) { background: #f0f7e8; }
+.county-option.active { background: #e8f3dc; }
+.county-option.busy { opacity: 0.75; cursor: wait; }
+
+.county-option-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.county-option-dot {
+  font-size: 0.65rem;
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+}
+
+.county-option-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1a2010;
+  flex: 1;
+}
+
+.county-option-crop {
+  font-size: 0.65rem;
+  color: #8a9a78;
+  font-style: italic;
+}
+
+.county-option-progress {
+  height: 3px;
+  background: #e8ede0;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 0.15rem;
+}
+
+.county-option-bar {
+  height: 100%;
+  background: #b8860b;
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.county-option-hint { font-size: 0.63rem; color: #8a9a78; padding-left: 1.4rem; }
+.county-option-hint.error { color: #c05840; }
+.county-option-empty { padding: 0.65rem; font-size: 0.75rem; color: #8a9a78; text-align: center; }
+
+/* County fetch progress */
+.county-fetch-progress {
+  margin-top: 0.45rem;
+  background: #f7f9f4;
+  border: 1px solid #dde5d4;
+  border-radius: 5px;
+  padding: 0.5rem 0.65rem;
+}
+
+.county-fetch-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #5a7a42;
+  margin-bottom: 0.3rem;
+}
+
+.county-fetch-bar-track {
+  height: 4px;
+  background: #dde5d4;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.3rem;
+}
+
+.county-fetch-bar-fill {
+  height: 100%;
+  background: #3d7a22;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.county-fetch-message {
+  font-size: 0.62rem;
+  color: #7a8f68;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.county-loading-notice {
+  background: #fffbec;
+  border: 1px solid #e8d890;
+  color: #8a7010;
+  font-size: 0.72rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 5px;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}

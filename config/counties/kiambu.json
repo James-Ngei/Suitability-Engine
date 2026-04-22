@@ -1,0 +1,25 @@
+{
+  "county": "kiambu",
+  "display_name": "Kiambu County",
+  "country": "Kenya",
+  "map_center": [
+    -1.05,
+    36.9
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 36.53,
+    "south": -1.35,
+    "east": 37.17,
+    "north": -0.7
+  },
+  "osm_relation_id": 192791,
+  "layers": {
+    "elevation": "kiambu_elevation.tif",
+    "rainfall": "kiambu_rainfall.tif",
+    "temperature": "kiambu_temperature.tif",
+    "soil": "kiambu_soil.tif",
+    "slope": "kiambu_slope.tif"
+  }
+}

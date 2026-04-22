@@ -1,0 +1,25 @@
+{
+  "county": "tharaka_nithi",
+  "display_name": "Tharaka-Nithi County",
+  "country": "Kenya",
+  "map_center": [
+    -0.3,
+    37.97
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 37.48,
+    "south": -0.8,
+    "east": 38.5,
+    "north": 0.22
+  },
+  "osm_relation_id": 192821,
+  "layers": {
+    "elevation": "tharaka_nithi_elevation.tif",
+    "rainfall": "tharaka_nithi_rainfall.tif",
+    "temperature": "tharaka_nithi_temperature.tif",
+    "soil": "tharaka_nithi_soil.tif",
+    "slope": "tharaka_nithi_slope.tif"
+  }
+}

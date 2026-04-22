@@ -1,0 +1,83 @@
+{
+  "crop_id": "coffee",
+  "display_name": "Coffee",
+  "scientific_name": "Coffea arabica",
+  "description": "Premium export crop; Kenya AA is world-renowned",
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 1200,
+        "b": 1500,
+        "c": 2100,
+        "d": 2500
+      },
+      "description": "High-altitude Arabica; 1500-2100m optimal"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 900,
+        "b": 1200,
+        "c": 1800,
+        "d": 2200
+      },
+      "description": "1200-1800mm with dry season for cherry ripening"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 19,
+        "spread": 4
+      },
+      "description": "Cool highland temps; optimal 16-22\u00b0C"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 150,
+        "b": 200,
+        "c": 380,
+        "d": 500
+      },
+      "description": "Deep fertile soils; volcanic preferred"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 20
+      },
+      "description": "Hillside crop; natural drainage important"
+    }
+  },
+  "weights": {
+    "rainfall": 0.25,
+    "elevation": 0.3,
+    "temperature": 0.25,
+    "soil": 0.15,
+    "slope": 0.05
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall mm/yr",
+      "optimal_range": "1200-1800 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level (m)",
+      "optimal_range": "1500-2100 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature \u00b0C",
+      "optimal_range": "16-22\u00b0C (opt 19\u00b0C)"
+    },
+    "soil": {
+      "description": "Soil clay content SoilGrids g/kg",
+      "optimal_range": "200-380 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope degrees",
+      "optimal_range": "0-10\u00b0 (max 20\u00b0)"
+    }
+  }
+}

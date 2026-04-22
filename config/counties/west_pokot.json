@@ -1,0 +1,25 @@
+{
+  "county": "west_pokot",
+  "display_name": "West Pokot County",
+  "country": "Kenya",
+  "map_center": [
+    1.55,
+    35.27
+  ],
+  "map_zoom": 9,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 34.87,
+    "south": 0.72,
+    "east": 35.82,
+    "north": 2.35
+  },
+  "osm_relation_id": 192827,
+  "layers": {
+    "elevation": "west_pokot_elevation.tif",
+    "rainfall": "west_pokot_rainfall.tif",
+    "temperature": "west_pokot_temperature.tif",
+    "soil": "west_pokot_soil.tif",
+    "slope": "west_pokot_slope.tif"
+  }
+}

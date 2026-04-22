@@ -1,0 +1,25 @@
+{
+  "county": "wajir",
+  "display_name": "Wajir County",
+  "country": "Kenya",
+  "map_center": [
+    1.75,
+    40.1
+  ],
+  "map_zoom": 8,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 38.9,
+    "south": 0.38,
+    "east": 41.5,
+    "north": 3.38
+  },
+  "osm_relation_id": 192826,
+  "layers": {
+    "elevation": "wajir_elevation.tif",
+    "rainfall": "wajir_rainfall.tif",
+    "temperature": "wajir_temperature.tif",
+    "soil": "wajir_soil.tif",
+    "slope": "wajir_slope.tif"
+  }
+}

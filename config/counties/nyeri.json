@@ -1,0 +1,25 @@
+{
+  "county": "nyeri",
+  "display_name": "Nyeri County",
+  "country": "Kenya",
+  "map_center": [
+    -0.43,
+    36.97
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 36.65,
+    "south": -0.9,
+    "east": 37.35,
+    "north": 0.03
+  },
+  "osm_relation_id": 192816,
+  "layers": {
+    "elevation": "nyeri_elevation.tif",
+    "rainfall": "nyeri_rainfall.tif",
+    "temperature": "nyeri_temperature.tif",
+    "soil": "nyeri_soil.tif",
+    "slope": "nyeri_slope.tif"
+  }
+}

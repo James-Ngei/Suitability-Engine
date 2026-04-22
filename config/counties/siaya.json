@@ -1,0 +1,25 @@
+{
+  "county": "siaya",
+  "display_name": "Siaya County",
+  "country": "Kenya",
+  "map_center": [
+    0.08,
+    34.32
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 33.9,
+    "south": -0.35,
+    "east": 34.8,
+    "north": 0.53
+  },
+  "osm_relation_id": 192818,
+  "layers": {
+    "elevation": "siaya_elevation.tif",
+    "rainfall": "siaya_rainfall.tif",
+    "temperature": "siaya_temperature.tif",
+    "soil": "siaya_soil.tif",
+    "slope": "siaya_slope.tif"
+  }
+}

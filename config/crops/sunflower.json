@@ -1,0 +1,83 @@
+{
+  "crop_id": "sunflower",
+  "display_name": "Sunflower",
+  "scientific_name": "Helianthus annuus",
+  "description": "Oilseed crop; increasingly important in Kenya's semi-arid zones",
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 0,
+        "b": 500,
+        "c": 1800,
+        "d": 2200
+      },
+      "description": "Wide altitude tolerance; 500-1800m optimal"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 400,
+        "b": 600,
+        "c": 1000,
+        "d": 1400
+      },
+      "description": "600-1000mm; drought-tolerant at maturity"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 24,
+        "spread": 5
+      },
+      "description": "Optimal 20-28\u00b0C; tolerates heat well"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 100,
+        "b": 150,
+        "c": 350,
+        "d": 500
+      },
+      "description": "Deep well-drained soils; tolerates a range"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 15
+      },
+      "description": "Mechanised harvest prefers gentle slopes"
+    }
+  },
+  "weights": {
+    "rainfall": 0.3,
+    "elevation": 0.15,
+    "temperature": 0.25,
+    "soil": 0.2,
+    "slope": 0.1
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall mm/yr",
+      "optimal_range": "600-1000 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level (m)",
+      "optimal_range": "500-1800 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature \u00b0C",
+      "optimal_range": "20-28\u00b0C (opt 24\u00b0C)"
+    },
+    "soil": {
+      "description": "Soil clay content SoilGrids g/kg",
+      "optimal_range": "150-350 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope degrees",
+      "optimal_range": "0-5\u00b0 (max 15\u00b0)"
+    }
+  }
+}

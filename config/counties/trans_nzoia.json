@@ -1,0 +1,25 @@
+{
+  "county": "trans_nzoia",
+  "display_name": "Trans Nzoia County",
+  "country": "Kenya",
+  "map_center": [
+    1.1,
+    35.0
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 34.73,
+    "south": 0.78,
+    "east": 35.35,
+    "north": 1.4
+  },
+  "osm_relation_id": 192822,
+  "layers": {
+    "elevation": "trans_nzoia_elevation.tif",
+    "rainfall": "trans_nzoia_rainfall.tif",
+    "temperature": "trans_nzoia_temperature.tif",
+    "soil": "trans_nzoia_soil.tif",
+    "slope": "trans_nzoia_slope.tif"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "county": "taita_taveta",
+  "display_name": "Taita Taveta County",
+  "country": "Kenya",
+  "map_center": [
+    -3.38,
+    38.28
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 37.58,
+    "south": -4.15,
+    "east": 39.07,
+    "north": -2.62
+  },
+  "osm_relation_id": 192819,
+  "layers": {
+    "elevation": "taita_taveta_elevation.tif",
+    "rainfall": "taita_taveta_rainfall.tif",
+    "temperature": "taita_taveta_temperature.tif",
+    "soil": "taita_taveta_soil.tif",
+    "slope": "taita_taveta_slope.tif"
+  }
+}

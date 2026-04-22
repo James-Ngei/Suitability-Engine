@@ -1,0 +1,25 @@
+{
+  "county": "turkana",
+  "display_name": "Turkana County",
+  "country": "Kenya",
+  "map_center": [
+    3.6,
+    35.85
+  ],
+  "map_zoom": 7,
+  "resolution": 0.01,
+  "bbox": {
+    "west": 34.58,
+    "south": 1.75,
+    "east": 36.97,
+    "north": 5.35
+  },
+  "osm_relation_id": 192823,
+  "layers": {
+    "elevation": "turkana_elevation.tif",
+    "rainfall": "turkana_rainfall.tif",
+    "temperature": "turkana_temperature.tif",
+    "soil": "turkana_soil.tif",
+    "slope": "turkana_slope.tif"
+  }
+}

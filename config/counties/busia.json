@@ -1,0 +1,25 @@
+{
+  "county": "busia",
+  "display_name": "Busia County",
+  "country": "Kenya",
+  "map_center": [
+    0.44,
+    34.15
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 33.9,
+    "south": 0.1,
+    "east": 34.45,
+    "north": 0.75
+  },
+  "osm_relation_id": 192787,
+  "layers": {
+    "elevation": "busia_elevation.tif",
+    "rainfall": "busia_rainfall.tif",
+    "temperature": "busia_temperature.tif",
+    "soil": "busia_soil.tif",
+    "slope": "busia_slope.tif"
+  }
+}

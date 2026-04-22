@@ -1,0 +1,25 @@
+{
+  "county": "nakuru",
+  "display_name": "Nakuru County",
+  "country": "Kenya",
+  "map_center": [
+    -0.3,
+    36.1
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 35.53,
+    "south": -1.22,
+    "east": 36.78,
+    "north": 0.68
+  },
+  "osm_relation_id": 192811,
+  "layers": {
+    "elevation": "nakuru_elevation.tif",
+    "rainfall": "nakuru_rainfall.tif",
+    "temperature": "nakuru_temperature.tif",
+    "soil": "nakuru_soil.tif",
+    "slope": "nakuru_slope.tif"
+  }
+}

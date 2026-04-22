@@ -1,0 +1,83 @@
+{
+  "crop_id": "sugarcane",
+  "display_name": "Sugarcane",
+  "scientific_name": "Saccharum officinarum",
+  "description": "Industrial crop concentrated in western Kenya lowlands",
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 0,
+        "b": 200,
+        "c": 1200,
+        "d": 1600
+      },
+      "description": "Lowland tropical crop; optimal below 1200m"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 1000,
+        "b": 1400,
+        "c": 2000,
+        "d": 2500
+      },
+      "description": "High water demand; 1400-2000mm"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 28,
+        "spread": 5
+      },
+      "description": "Tropical crop; optimal 24-32\u00b0C"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 150,
+        "b": 250,
+        "c": 450,
+        "d": 600
+      },
+      "description": "Deep heavy soils; moderate-high clay preferred"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 8
+      },
+      "description": "Mechanised crop; slopes above 8\u00b0 impractical"
+    }
+  },
+  "weights": {
+    "rainfall": 0.35,
+    "elevation": 0.2,
+    "temperature": 0.2,
+    "soil": 0.15,
+    "slope": 0.1
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall mm/yr",
+      "optimal_range": "1400-2000 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level (m)",
+      "optimal_range": "0-1200 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature \u00b0C",
+      "optimal_range": "24-32\u00b0C (opt 28\u00b0C)"
+    },
+    "soil": {
+      "description": "Soil clay content SoilGrids g/kg",
+      "optimal_range": "250-450 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope degrees",
+      "optimal_range": "0-3\u00b0 (max 8\u00b0)"
+    }
+  }
+}

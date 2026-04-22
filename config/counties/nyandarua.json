@@ -1,0 +1,25 @@
+{
+  "county": "nyandarua",
+  "display_name": "Nyandarua County",
+  "country": "Kenya",
+  "map_center": [
+    -0.18,
+    36.48
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 36.18,
+    "south": -0.65,
+    "east": 36.82,
+    "north": 0.3
+  },
+  "osm_relation_id": 192815,
+  "layers": {
+    "elevation": "nyandarua_elevation.tif",
+    "rainfall": "nyandarua_rainfall.tif",
+    "temperature": "nyandarua_temperature.tif",
+    "soil": "nyandarua_soil.tif",
+    "slope": "nyandarua_slope.tif"
+  }
+}

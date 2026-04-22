@@ -1,0 +1,25 @@
+{
+  "county": "narok",
+  "display_name": "Narok County",
+  "country": "Kenya",
+  "map_center": [
+    -1.55,
+    35.87
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 35.17,
+    "south": -2.38,
+    "east": 36.55,
+    "north": -0.55
+  },
+  "osm_relation_id": 192813,
+  "layers": {
+    "elevation": "narok_elevation.tif",
+    "rainfall": "narok_rainfall.tif",
+    "temperature": "narok_temperature.tif",
+    "soil": "narok_soil.tif",
+    "slope": "narok_slope.tif"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "county": "makueni",
+  "display_name": "Makueni County",
+  "country": "Kenya",
+  "map_center": [
+    -2.3,
+    37.65
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 37.07,
+    "south": -3.17,
+    "east": 38.35,
+    "north": -1.42
+  },
+  "osm_relation_id": 192803,
+  "layers": {
+    "elevation": "makueni_elevation.tif",
+    "rainfall": "makueni_rainfall.tif",
+    "temperature": "makueni_temperature.tif",
+    "soil": "makueni_soil.tif",
+    "slope": "makueni_slope.tif"
+  }
+}

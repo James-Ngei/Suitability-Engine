@@ -1,0 +1,25 @@
+{
+  "county": "samburu",
+  "display_name": "Samburu County",
+  "country": "Kenya",
+  "map_center": [
+    1.4,
+    36.9
+  ],
+  "map_zoom": 8,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 35.97,
+    "south": 0.52,
+    "east": 37.72,
+    "north": 2.3
+  },
+  "osm_relation_id": 192817,
+  "layers": {
+    "elevation": "samburu_elevation.tif",
+    "rainfall": "samburu_rainfall.tif",
+    "temperature": "samburu_temperature.tif",
+    "soil": "samburu_soil.tif",
+    "slope": "samburu_slope.tif"
+  }
+}

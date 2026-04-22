@@ -1,0 +1,25 @@
+{
+  "county": "vihiga",
+  "display_name": "Vihiga County",
+  "country": "Kenya",
+  "map_center": [
+    0.07,
+    34.72
+  ],
+  "map_zoom": 11,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 34.57,
+    "south": -0.17,
+    "east": 34.88,
+    "north": 0.32
+  },
+  "osm_relation_id": 192825,
+  "layers": {
+    "elevation": "vihiga_elevation.tif",
+    "rainfall": "vihiga_rainfall.tif",
+    "temperature": "vihiga_temperature.tif",
+    "soil": "vihiga_soil.tif",
+    "slope": "vihiga_slope.tif"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "county": "machakos",
+  "display_name": "Machakos County",
+  "country": "Kenya",
+  "map_center": [
+    -1.52,
+    37.27
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 36.75,
+    "south": -2.47,
+    "east": 37.97,
+    "north": -0.58
+  },
+  "osm_relation_id": 192802,
+  "layers": {
+    "elevation": "machakos_elevation.tif",
+    "rainfall": "machakos_rainfall.tif",
+    "temperature": "machakos_temperature.tif",
+    "soil": "machakos_soil.tif",
+    "slope": "machakos_slope.tif"
+  }
+}

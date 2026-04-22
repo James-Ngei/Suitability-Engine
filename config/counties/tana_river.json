@@ -1,0 +1,25 @@
+{
+  "county": "tana_river",
+  "display_name": "Tana River County",
+  "country": "Kenya",
+  "map_center": [
+    -1.5,
+    39.9
+  ],
+  "map_zoom": 8,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 38.7,
+    "south": -2.75,
+    "east": 41.1,
+    "north": -0.22
+  },
+  "osm_relation_id": 192820,
+  "layers": {
+    "elevation": "tana_river_elevation.tif",
+    "rainfall": "tana_river_rainfall.tif",
+    "temperature": "tana_river_temperature.tif",
+    "soil": "tana_river_soil.tif",
+    "slope": "tana_river_slope.tif"
+  }
+}

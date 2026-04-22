@@ -1,0 +1,25 @@
+{
+  "county": "uasin_gishu",
+  "display_name": "Uasin Gishu County",
+  "country": "Kenya",
+  "map_center": [
+    0.55,
+    35.27
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 34.93,
+    "south": 0.22,
+    "east": 35.63,
+    "north": 0.9
+  },
+  "osm_relation_id": 192824,
+  "layers": {
+    "elevation": "uasin_gishu_elevation.tif",
+    "rainfall": "uasin_gishu_rainfall.tif",
+    "temperature": "uasin_gishu_temperature.tif",
+    "soil": "uasin_gishu_soil.tif",
+    "slope": "uasin_gishu_slope.tif"
+  }
+}

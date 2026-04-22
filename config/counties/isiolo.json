@@ -1,0 +1,25 @@
+{
+  "county": "isiolo",
+  "display_name": "Isiolo County",
+  "country": "Kenya",
+  "map_center": [
+    1.3,
+    38.0
+  ],
+  "map_zoom": 8,
+  "resolution": 0.01,
+  "bbox": {
+    "west": 36.5,
+    "south": -0.2,
+    "east": 39.5,
+    "north": 2.9
+  },
+  "osm_relation_id": 192785,
+  "layers": {
+    "elevation": "isiolo_elevation.tif",
+    "rainfall": "isiolo_rainfall.tif",
+    "temperature": "isiolo_temperature.tif",
+    "soil": "isiolo_soil.tif",
+    "slope": "isiolo_slope.tif"
+  }
+}

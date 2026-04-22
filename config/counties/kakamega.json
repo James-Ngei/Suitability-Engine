@@ -1,0 +1,25 @@
+{
+  "county": "kakamega",
+  "display_name": "Kakamega County",
+  "country": "Kenya",
+  "map_center": [
+    0.28,
+    34.75
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 34.46,
+    "south": -0.05,
+    "east": 35.08,
+    "north": 0.65
+  },
+  "osm_relation_id": 192789,
+  "layers": {
+    "elevation": "kakamega_elevation.tif",
+    "rainfall": "kakamega_rainfall.tif",
+    "temperature": "kakamega_temperature.tif",
+    "soil": "kakamega_soil.tif",
+    "slope": "kakamega_slope.tif"
+  }
+}

@@ -1,0 +1,83 @@
+{
+  "crop_id": "cassava",
+  "display_name": "Cassava",
+  "scientific_name": "Manihot esculenta",
+  "description": "Drought-tolerant root crop; key food security crop in ASALs",
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 0,
+        "b": 200,
+        "c": 1500,
+        "d": 2000
+      },
+      "description": "Sea level to 1500m; highland varieties to 2000m"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 500,
+        "b": 750,
+        "c": 1500,
+        "d": 2000
+      },
+      "description": "750-1500mm optimal; tolerates 500mm"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 27,
+        "spread": 6
+      },
+      "description": "Optimal 25-29\u00b0C; tolerant of high temps"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 50,
+        "b": 100,
+        "c": 300,
+        "d": 450
+      },
+      "description": "Sandy loam preferred; poor drainage is limiting"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 25
+      },
+      "description": "Tolerates steeper slopes than most crops"
+    }
+  },
+  "weights": {
+    "rainfall": 0.3,
+    "elevation": 0.15,
+    "temperature": 0.2,
+    "soil": 0.25,
+    "slope": 0.1
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall mm/yr",
+      "optimal_range": "750-1500 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level (m)",
+      "optimal_range": "0-1500 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature \u00b0C",
+      "optimal_range": "25-29\u00b0C (opt 27\u00b0C)"
+    },
+    "soil": {
+      "description": "Soil clay content SoilGrids g/kg",
+      "optimal_range": "100-300 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope degrees",
+      "optimal_range": "0-12\u00b0 (max 25\u00b0)"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "county": "meru",
+  "display_name": "Meru County",
+  "country": "Kenya",
+  "map_center": [
+    0.3,
+    37.65
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 37.0,
+    "south": -0.4,
+    "east": 38.38,
+    "north": 1.05
+  },
+  "osm_relation_id": 192806,
+  "layers": {
+    "elevation": "meru_elevation.tif",
+    "rainfall": "meru_rainfall.tif",
+    "temperature": "meru_temperature.tif",
+    "soil": "meru_soil.tif",
+    "slope": "meru_slope.tif"
+  }
+}

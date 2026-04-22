@@ -1,0 +1,25 @@
+{
+  "county": "migori",
+  "display_name": "Migori County",
+  "country": "Kenya",
+  "map_center": [
+    -1.15,
+    34.5
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 34.1,
+    "south": -1.55,
+    "east": 35.05,
+    "north": -0.6
+  },
+  "osm_relation_id": 192807,
+  "layers": {
+    "elevation": "migori_elevation.tif",
+    "rainfall": "migori_rainfall.tif",
+    "temperature": "migori_temperature.tif",
+    "soil": "migori_soil.tif",
+    "slope": "migori_slope.tif"
+  }
+}

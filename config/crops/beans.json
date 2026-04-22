@@ -1,0 +1,83 @@
+{
+  "crop_id": "beans",
+  "display_name": "Beans",
+  "scientific_name": "Phaseolus vulgaris",
+  "description": "Common bean; Kenya's primary legume and protein source",
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 500,
+        "b": 1000,
+        "c": 2200,
+        "d": 2800
+      },
+      "description": "Highland crop; 1000-2200m optimal"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 400,
+        "b": 600,
+        "c": 1200,
+        "d": 1600
+      },
+      "description": "600-1200mm; waterlogging is major risk"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 19,
+        "spread": 5
+      },
+      "description": "Cool-season crop; optimal 17-22\u00b0C"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 100,
+        "b": 150,
+        "c": 350,
+        "d": 500
+      },
+      "description": "Well-drained loamy soils; pH 6.0-7.0"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 15
+      },
+      "description": "Gentle slopes; erosion concern on steeper land"
+    }
+  },
+  "weights": {
+    "rainfall": 0.3,
+    "elevation": 0.2,
+    "temperature": 0.25,
+    "soil": 0.15,
+    "slope": 0.1
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall mm/yr",
+      "optimal_range": "600-1200 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level (m)",
+      "optimal_range": "1000-2200 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature \u00b0C",
+      "optimal_range": "17-22\u00b0C (opt 19\u00b0C)"
+    },
+    "soil": {
+      "description": "Soil clay content SoilGrids g/kg",
+      "optimal_range": "150-350 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope degrees",
+      "optimal_range": "0-5\u00b0 (max 15\u00b0)"
+    }
+  }
+}

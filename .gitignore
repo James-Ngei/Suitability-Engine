@@ -12,6 +12,7 @@ __pycache__/
 *.tif
 
 data/
+extract_boundaries.py
 
 !data/rag_docs/
 !data/rag_docs/*.txt

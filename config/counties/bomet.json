@@ -1,0 +1,25 @@
+{
+  "county": "bomet",
+  "display_name": "Bomet County",
+  "country": "Kenya",
+  "map_center": [
+    -0.78,
+    35.38
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 35.0,
+    "south": -1.2,
+    "east": 35.75,
+    "north": -0.35
+  },
+  "osm_relation_id": 192780,
+  "layers": {
+    "elevation": "bomet_elevation.tif",
+    "rainfall": "bomet_rainfall.tif",
+    "temperature": "bomet_temperature.tif",
+    "soil": "bomet_soil.tif",
+    "slope": "bomet_slope.tif"
+  }
+}

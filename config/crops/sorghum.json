@@ -1,0 +1,83 @@
+{
+  "crop_id": "sorghum",
+  "display_name": "Sorghum",
+  "scientific_name": "Sorghum bicolor",
+  "description": "Drought-tolerant cereal for ASAL regions",
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 0,
+        "b": 300,
+        "c": 1400,
+        "d": 1800
+      },
+      "description": "Lowland to mid-altitude; optimal below 1400m"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 300,
+        "b": 450,
+        "c": 750,
+        "d": 1000
+      },
+      "description": "Drought-tolerant; 450-750mm optimal"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 29,
+        "spread": 5
+      },
+      "description": "Warm crop; optimal 25-33\u00b0C"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 80,
+        "b": 150,
+        "c": 400,
+        "d": 550
+      },
+      "description": "Tolerates poor soils; wide clay range"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 20
+      },
+      "description": "Tolerates slopes better than maize"
+    }
+  },
+  "weights": {
+    "rainfall": 0.35,
+    "elevation": 0.15,
+    "temperature": 0.25,
+    "soil": 0.15,
+    "slope": 0.1
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall mm/yr",
+      "optimal_range": "450-750 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level (m)",
+      "optimal_range": "0-1400 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature \u00b0C",
+      "optimal_range": "25-33\u00b0C (opt 29\u00b0C)"
+    },
+    "soil": {
+      "description": "Soil clay content SoilGrids g/kg",
+      "optimal_range": "150-400 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope degrees",
+      "optimal_range": "0-10\u00b0 (max 20\u00b0)"
+    }
+  }
+}

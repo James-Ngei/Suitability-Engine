@@ -1,0 +1,25 @@
+{
+  "county": "garissa",
+  "display_name": "Garissa County",
+  "country": "Kenya",
+  "map_center": [
+    -0.45,
+    39.64
+  ],
+  "map_zoom": 8,
+  "resolution": 0.01,
+  "bbox": {
+    "west": 38.5,
+    "south": -2.0,
+    "east": 41.9,
+    "north": 1.3
+  },
+  "osm_relation_id": 192783,
+  "layers": {
+    "elevation": "garissa_elevation.tif",
+    "rainfall": "garissa_rainfall.tif",
+    "temperature": "garissa_temperature.tif",
+    "soil": "garissa_soil.tif",
+    "slope": "garissa_slope.tif"
+  }
+}

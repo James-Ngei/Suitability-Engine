@@ -1,0 +1,25 @@
+{
+  "county": "lamu",
+  "display_name": "Lamu County",
+  "country": "Kenya",
+  "map_center": [
+    -2.2,
+    40.9
+  ],
+  "map_zoom": 9,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 40.07,
+    "south": -2.72,
+    "east": 41.55,
+    "north": -1.6
+  },
+  "osm_relation_id": 192801,
+  "layers": {
+    "elevation": "lamu_elevation.tif",
+    "rainfall": "lamu_rainfall.tif",
+    "temperature": "lamu_temperature.tif",
+    "soil": "lamu_soil.tif",
+    "slope": "lamu_slope.tif"
+  }
+}

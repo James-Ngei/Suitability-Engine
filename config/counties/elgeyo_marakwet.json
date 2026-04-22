@@ -1,0 +1,25 @@
+{
+  "county": "elgeyo_marakwet",
+  "display_name": "Elgeyo-Marakwet County",
+  "country": "Kenya",
+  "map_center": [
+    1.0,
+    35.52
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 35.25,
+    "south": 0.4,
+    "east": 35.82,
+    "north": 1.6
+  },
+  "osm_relation_id": 192781,
+  "layers": {
+    "elevation": "elgeyo_marakwet_elevation.tif",
+    "rainfall": "elgeyo_marakwet_rainfall.tif",
+    "temperature": "elgeyo_marakwet_temperature.tif",
+    "soil": "elgeyo_marakwet_soil.tif",
+    "slope": "elgeyo_marakwet_slope.tif"
+  }
+}

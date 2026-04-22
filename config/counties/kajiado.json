@@ -1,0 +1,25 @@
+{
+  "county": "kajiado",
+  "display_name": "Kajiado County",
+  "country": "Kenya",
+  "map_center": [
+    -2.2,
+    36.8
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 35.97,
+    "south": -3.38,
+    "east": 37.98,
+    "north": -1.0
+  },
+  "osm_relation_id": 192788,
+  "layers": {
+    "elevation": "kajiado_elevation.tif",
+    "rainfall": "kajiado_rainfall.tif",
+    "temperature": "kajiado_temperature.tif",
+    "soil": "kajiado_soil.tif",
+    "slope": "kajiado_slope.tif"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "county": "nyamira",
+  "display_name": "Nyamira County",
+  "country": "Kenya",
+  "map_center": [
+    -0.57,
+    34.93
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 34.7,
+    "south": -0.9,
+    "east": 35.17,
+    "north": -0.22
+  },
+  "osm_relation_id": 192814,
+  "layers": {
+    "elevation": "nyamira_elevation.tif",
+    "rainfall": "nyamira_rainfall.tif",
+    "temperature": "nyamira_temperature.tif",
+    "soil": "nyamira_soil.tif",
+    "slope": "nyamira_slope.tif"
+  }
+}

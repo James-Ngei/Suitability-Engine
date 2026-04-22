@@ -1,0 +1,25 @@
+{
+  "county": "kisii",
+  "display_name": "Kisii County",
+  "country": "Kenya",
+  "map_center": [
+    -0.67,
+    34.75
+  ],
+  "map_zoom": 10,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 34.5,
+    "south": -1.05,
+    "east": 35.0,
+    "north": -0.33
+  },
+  "osm_relation_id": 192794,
+  "layers": {
+    "elevation": "kisii_elevation.tif",
+    "rainfall": "kisii_rainfall.tif",
+    "temperature": "kisii_temperature.tif",
+    "soil": "kisii_soil.tif",
+    "slope": "kisii_slope.tif"
+  }
+}

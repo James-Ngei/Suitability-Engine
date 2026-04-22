@@ -1,0 +1,25 @@
+{
+  "county": "nandi",
+  "display_name": "Nandi County",
+  "country": "Kenya",
+  "map_center": [
+    0.18,
+    35.2
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 34.87,
+    "south": -0.25,
+    "east": 35.58,
+    "north": 0.67
+  },
+  "osm_relation_id": 192812,
+  "layers": {
+    "elevation": "nandi_elevation.tif",
+    "rainfall": "nandi_rainfall.tif",
+    "temperature": "nandi_temperature.tif",
+    "soil": "nandi_soil.tif",
+    "slope": "nandi_slope.tif"
+  }
+}

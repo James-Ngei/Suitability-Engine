@@ -1,0 +1,25 @@
+{
+  "county": "kilifi",
+  "display_name": "Kilifi County",
+  "country": "Kenya",
+  "map_center": [
+    -3.5,
+    39.87
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 39.18,
+    "south": -4.18,
+    "east": 40.62,
+    "north": -2.7
+  },
+  "osm_relation_id": 192792,
+  "layers": {
+    "elevation": "kilifi_elevation.tif",
+    "rainfall": "kilifi_rainfall.tif",
+    "temperature": "kilifi_temperature.tif",
+    "soil": "kilifi_soil.tif",
+    "slope": "kilifi_slope.tif"
+  }
+}

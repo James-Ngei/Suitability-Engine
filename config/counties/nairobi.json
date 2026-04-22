@@ -1,0 +1,25 @@
+{
+  "county": "nairobi",
+  "display_name": "Nairobi County",
+  "country": "Kenya",
+  "map_center": [
+    -1.28,
+    36.82
+  ],
+  "map_zoom": 11,
+  "resolution": 0.001,
+  "bbox": {
+    "west": 36.65,
+    "south": -1.45,
+    "east": 37.05,
+    "north": -1.12
+  },
+  "osm_relation_id": 192810,
+  "layers": {
+    "elevation": "nairobi_elevation.tif",
+    "rainfall": "nairobi_rainfall.tif",
+    "temperature": "nairobi_temperature.tif",
+    "soil": "nairobi_soil.tif",
+    "slope": "nairobi_slope.tif"
+  }
+}

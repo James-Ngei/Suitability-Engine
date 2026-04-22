@@ -1,0 +1,25 @@
+{
+  "county": "kisumu",
+  "display_name": "Kisumu County",
+  "country": "Kenya",
+  "map_center": [
+    -0.13,
+    34.75
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 34.37,
+    "south": -0.47,
+    "east": 35.17,
+    "north": 0.22
+  },
+  "osm_relation_id": 192795,
+  "layers": {
+    "elevation": "kisumu_elevation.tif",
+    "rainfall": "kisumu_rainfall.tif",
+    "temperature": "kisumu_temperature.tif",
+    "soil": "kisumu_soil.tif",
+    "slope": "kisumu_slope.tif"
+  }
+}

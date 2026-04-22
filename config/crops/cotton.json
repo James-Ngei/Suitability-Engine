@@ -1,0 +1,83 @@
+{
+  "crop_id": "cotton",
+  "display_name": "Cotton",
+  "scientific_name": "Gossypium hirsutum",
+  "description": "Fibre crop suited to warm, semi-arid to sub-humid climates",
+  "normalization": {
+    "elevation": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 200,
+        "b": 500,
+        "c": 1200,
+        "d": 1800
+      },
+      "description": "Cotton grows best 500-1200m; poor above 1800m"
+    },
+    "rainfall": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 400,
+        "b": 600,
+        "c": 1000,
+        "d": 1300
+      },
+      "description": "Needs 600-1000mm; drought-tolerant but not arid"
+    },
+    "temperature": {
+      "type": "gaussian",
+      "params": {
+        "optimal": 27,
+        "spread": 5
+      },
+      "description": "Optimal 25-30\u00b0C; frost-sensitive"
+    },
+    "soil": {
+      "type": "trapezoidal",
+      "params": {
+        "a": 100,
+        "b": 200,
+        "c": 400,
+        "d": 550
+      },
+      "description": "Moderate clay 200-400 g/kg; deep well-drained soils"
+    },
+    "slope": {
+      "type": "linear_descending",
+      "params": {
+        "min_val": 0,
+        "max_val": 15
+      },
+      "description": "Flat to gently sloping; mechanisation limit 15\u00b0"
+    }
+  },
+  "weights": {
+    "rainfall": 0.3,
+    "elevation": 0.15,
+    "temperature": 0.2,
+    "soil": 0.2,
+    "slope": 0.15
+  },
+  "criteria_info": {
+    "rainfall": {
+      "description": "Annual rainfall mm/yr",
+      "optimal_range": "600-1000 mm"
+    },
+    "elevation": {
+      "description": "Elevation above sea level (m)",
+      "optimal_range": "500-1200 m"
+    },
+    "temperature": {
+      "description": "Mean annual temperature \u00b0C",
+      "optimal_range": "25-30\u00b0C (opt 27\u00b0C)"
+    },
+    "soil": {
+      "description": "Soil clay content SoilGrids g/kg",
+      "optimal_range": "200-400 g/kg"
+    },
+    "slope": {
+      "description": "Terrain slope degrees",
+      "optimal_range": "0-5\u00b0 (max 15\u00b0)"
+    }
+  }
+}

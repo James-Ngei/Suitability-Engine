@@ -1,0 +1,25 @@
+{
+  "county": "laikipia",
+  "display_name": "Laikipia County",
+  "country": "Kenya",
+  "map_center": [
+    0.35,
+    36.8
+  ],
+  "map_zoom": 9,
+  "resolution": 0.005,
+  "bbox": {
+    "west": 36.18,
+    "south": -0.65,
+    "east": 37.45,
+    "north": 1.35
+  },
+  "osm_relation_id": 192800,
+  "layers": {
+    "elevation": "laikipia_elevation.tif",
+    "rainfall": "laikipia_rainfall.tif",
+    "temperature": "laikipia_temperature.tif",
+    "soil": "laikipia_soil.tif",
+    "slope": "laikipia_slope.tif"
+  }
+}

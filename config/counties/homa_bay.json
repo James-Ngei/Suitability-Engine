@@ -1,0 +1,25 @@
+{
+  "county": "homa_bay",
+  "display_name": "Homa Bay County",
+  "country": "Kenya",
+  "map_center": [
+    -0.63,
+    34.33
+  ],
+  "map_zoom": 10,
+  "resolution": 0.003,
+  "bbox": {
+    "west": 33.88,
+    "south": -1.18,
+    "east": 34.78,
+    "north": -0.05
+  },
+  "osm_relation_id": 192784,
+  "layers": {
+    "elevation": "homa_bay_elevation.tif",
+    "rainfall": "homa_bay_rainfall.tif",
+    "temperature": "homa_bay_temperature.tif",
+    "soil": "homa_bay_soil.tif",
+    "slope": "homa_bay_slope.tif"
+  }
+}
