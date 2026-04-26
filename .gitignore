@@ -17,3 +17,4 @@ extract_boundaries.py
 !data/rag_docs/
 !data/rag_docs/*.txt
 !data/rag_docs/*.md:Zone.Identifier
+:Zone.Identifier
