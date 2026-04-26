@@ -50,83 +50,107 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
       <div style={{
         display:     'flex',
         alignItems:  'center',
-        gap:         '0',
-        marginBottom: '0',
+        gap:         '6px',
+        // Ensure the row itself never overflows the panel
+        minWidth:    0,
+        overflow:    'hidden',
       }}>
-        {/* Label */}
+        {/* Label — fixed width, never shrinks, never wraps */}
         <span style={{
           fontSize:      '0.68rem',
           fontWeight:    600,
           color:         '#7a8f68',
-          width:         '46px',
+          // Fixed width so it never squishes against the button border
+          width:         '48px',
+          minWidth:      '48px',
           flexShrink:    0,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
+          // Prevent the label text itself from wrapping
+          whiteSpace:    'nowrap',
+          overflow:      'hidden',
         }}>
           {label}
         </span>
 
-        {/* Trigger */}
+        {/* Trigger button — fills remaining space, clips long text with ellipsis */}
         <button
           onClick={() => !disabled && setOpen(o => !o)}
           disabled={disabled}
           style={{
-            flex:          1,
+            // Takes all remaining space but never pushes outside the panel
+            flex:          '1 1 0',
+            minWidth:      0,
             display:       'flex',
             alignItems:    'center',
             justifyContent:'space-between',
-            padding:       '4px 8px',
+            padding:       '4px 7px',
             background:    open ? '#f0f7e8' : '#ffffff',
             border:        `1px solid ${open ? '#3d7a22' : '#c8d8b0'}`,
             borderRadius:  '5px',
             cursor:        disabled ? 'not-allowed' : 'pointer',
             opacity:       disabled ? 0.5 : 1,
             transition:    'all 0.12s',
-            gap:           '6px',
+            gap:           '4px',
+            // Ensure the button itself clips rather than expanding
+            overflow:      'hidden',
           }}
         >
+          {/* County/crop/layer name — truncates with ellipsis on overflow */}
           <span style={{
-            fontSize:   '0.78rem',
-            fontWeight: 600,
-            color:      '#1a2010',
-            flex:       1,
-            textAlign:  'left',
-            overflow:   'hidden',
-            textOverflow:'ellipsis',
-            whiteSpace: 'nowrap',
+            fontSize:     '0.78rem',
+            fontWeight:   600,
+            color:        '#1a2010',
+            // flex: 1 with minWidth: 0 is the key combo for ellipsis to work in flex
+            flex:         '1 1 0',
+            minWidth:     0,
+            textAlign:    'left',
+            overflow:     'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace:   'nowrap',
           }}>
             {current?.label || '—'}
           </span>
 
-          {/* New result badge */}
+          {/* NEW badge — only shown when a fresh analysis result is waiting */}
           {badge && (
             <span style={{
-              fontSize:    '0.55rem',
-              fontWeight:  700,
-              background:  '#3d7a22',
-              color:       '#ffffff',
-              padding:     '1px 5px',
-              borderRadius:'8px',
-              flexShrink:  0,
+              fontSize:     '0.55rem',
+              fontWeight:   700,
+              background:   '#3d7a22',
+              color:        '#ffffff',
+              padding:      '1px 5px',
+              borderRadius: '8px',
+              // Never shrink the badge — it's small enough already
+              flexShrink:   0,
               letterSpacing:'0.03em',
+              whiteSpace:   'nowrap',
             }}>
               NEW
             </span>
           )}
 
-          <span style={{ fontSize: '0.55rem', color: '#8a9a78', flexShrink: 0 }}>
+          {/* Chevron arrow */}
+          <span style={{
+            fontSize:  '0.55rem',
+            color:     '#8a9a78',
+            flexShrink: 0,
+            // Small gap from the text so the arrow doesn't crowd it
+            marginLeft: '2px',
+          }}>
             {open ? '▲' : '▼'}
           </span>
         </button>
       </div>
 
-      {/* Dropdown */}
+      {/* Dropdown list */}
       {open && (
         <div style={{
           position:   'absolute',
-          top:        'calc(100% + 3px)',
-          left:       '46px',
+          // Align left edge with the button start (after the label)
+          left:       '54px',
           right:      0,
+          top:        'calc(100% + 3px)',
           background: '#ffffff',
           border:     '1.5px solid #c0d4a8',
           borderRadius:'6px',
@@ -134,6 +158,8 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
           boxShadow:  '0 4px 16px rgba(0,0,0,0.13)',
           maxHeight:  '240px',
           overflowY:  'auto',
+          // Ensure dropdown itself never overflows viewport horizontally
+          minWidth:   '140px',
         }}>
           {options.map(opt => (
             <button
@@ -153,8 +179,14 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
                 textAlign:    'left',
                 transition:   'background 0.1s',
               }}
-              onMouseEnter={e => { if (opt.id !== value && !opt.disabled) e.currentTarget.style.background = '#f5faf0'; }}
-              onMouseLeave={e => { if (opt.id !== value) e.currentTarget.style.background = opt.id === value ? '#e8f3dc' : '#ffffff'; }}
+              onMouseEnter={e => {
+                if (opt.id !== value && !opt.disabled)
+                  e.currentTarget.style.background = '#f5faf0';
+              }}
+              onMouseLeave={e => {
+                if (opt.id !== value)
+                  e.currentTarget.style.background = opt.id === value ? '#e8f3dc' : '#ffffff';
+              }}
             >
               <span style={{
                 fontSize:   '0.78rem',
@@ -163,15 +195,22 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
                 display:    'flex',
                 alignItems: 'center',
                 gap:        '6px',
+                // Allow long names to wrap inside the dropdown (it has enough width)
+                whiteSpace: 'normal',
+                wordBreak:  'break-word',
               }}>
                 {opt.id === value && (
-                  <span style={{ fontSize:'0.55rem', color:'#3d7a22' }}>✓</span>
+                  <span style={{ fontSize:'0.55rem', color:'#3d7a22', flexShrink: 0 }}>✓</span>
                 )}
                 {opt.label}
                 {opt.status && opt.status !== 'ready' && opt.status !== 'idle' && (
                   <span style={{
-                    fontSize:'0.58rem', color:'#b8860b',
-                    marginLeft:'auto', fontStyle:'italic',
+                    fontSize:    '0.58rem',
+                    color:       '#b8860b',
+                    marginLeft:  'auto',
+                    fontStyle:   'italic',
+                    flexShrink:  0,
+                    paddingLeft: '6px',
                   }}>
                     {opt.status === 'fetching' || opt.status === 'pipeline'
                       ? `${opt.pct||0}%` : opt.status}
@@ -179,7 +218,11 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
                 )}
               </span>
               {opt.hint && (
-                <span style={{ fontSize:'0.63rem', color:'#9aaa88', paddingLeft: opt.id === value ? '14px' : '0' }}>
+                <span style={{
+                  fontSize:   '0.63rem',
+                  color:      '#9aaa88',
+                  paddingLeft: opt.id === value ? '14px' : '0',
+                }}>
                   {opt.hint}
                 </span>
               )}
@@ -205,7 +248,7 @@ function AnalysisSetup({
 }) {
   const [counties,      setCounties]      = useState([]);
   const [crops,         setCrops]         = useState([]);
-  const [countyLoading, setCountyLoading] = useState(null); // county id being loaded
+  const [countyLoading, setCountyLoading] = useState(null);
   const pollRef = useRef(null);
 
   // Fetch county + crop lists
@@ -223,7 +266,6 @@ function AnalysisSetup({
       try {
         const r    = await fetch(`${apiBaseUrl}/status/${countyId}`);
         const data = await r.json();
-        // Update counties list with new status
         setCounties(prev => prev.map(c =>
           c.county === countyId ? { ...c, status: data.status, pct: data.pct } : c
         ));
@@ -248,7 +290,7 @@ function AnalysisSetup({
     if (!entry) return;
 
     if (entry.loaded || entry.status === 'ready') {
-      const r   = await fetch(`${apiBaseUrl}/county?county=${countyId}`).then(r => r.json());
+      const r = await fetch(`${apiBaseUrl}/county?county=${countyId}`).then(r => r.json());
       onCountyChange(countyId, r);
       return;
     }
@@ -301,7 +343,7 @@ function AnalysisSetup({
               : null,
   }));
 
-  // Build crop options — just display_name, no scientific name
+  // Build crop options
   const cropOptions = crops.map(c => ({
     id:    c.crop_id,
     label: c.display_name,
@@ -347,7 +389,7 @@ function AnalysisSetup({
         badge={newResultReady && activeLayer !== 'suitability'}
       />
 
-      {/* County fetch progress */}
+      {/* County fetch progress bar */}
       {loadingEntry && (loadingEntry.status === 'fetching' || loadingEntry.status === 'pipeline') && (
         <div style={{ marginTop: '2px' }}>
           <div style={{
@@ -358,17 +400,24 @@ function AnalysisSetup({
             marginBottom:   '3px',
           }}>
             <span style={{ fontStyle: 'italic' }}>
-              {loadingEntry.status === 'fetching' ? 'Fetching from Planetary Computer…' : 'Running pipeline…'}
+              {loadingEntry.status === 'fetching'
+                ? 'Fetching from Planetary Computer…'
+                : 'Running pipeline…'}
             </span>
             <span style={{ fontWeight: 700 }}>{loadingEntry.pct || 0}%</span>
           </div>
-          <div style={{ height: '3px', background: '#dde5d4', borderRadius: '2px', overflow: 'hidden' }}>
+          <div style={{
+            height:       '3px',
+            background:   '#dde5d4',
+            borderRadius: '2px',
+            overflow:     'hidden',
+          }}>
             <div style={{
-              height:     '100%',
-              width:      `${loadingEntry.pct || 0}%`,
-              background: '#3d7a22',
-              borderRadius:'2px',
-              transition: 'width 0.5s ease',
+              height:       '100%',
+              width:        `${loadingEntry.pct || 0}%`,
+              background:   '#3d7a22',
+              borderRadius: '2px',
+              transition:   'width 0.5s ease',
             }} />
           </div>
         </div>

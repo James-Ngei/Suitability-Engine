@@ -20,9 +20,9 @@
         "a": 400,
         "b": 600,
         "c": 1200,
-        "d": 1600
+        "d": 1800
       },
-      "description": "600-1200mm; waterlogging is major risk"
+      "description": "Optimal 600-1200mm; waterlogging is major risk above 1800mm"
     },
     "temperature": {
       "type": "gaussian",
@@ -30,7 +30,7 @@
         "optimal": 19,
         "spread": 5
       },
-      "description": "Cool-season crop; optimal 17-22\u00b0C"
+      "description": "Cool-season crop; optimal 17-22°C"
     },
     "soil": {
       "type": "trapezoidal",
@@ -68,8 +68,8 @@
       "optimal_range": "1000-2200 m"
     },
     "temperature": {
-      "description": "Mean annual temperature \u00b0C",
-      "optimal_range": "17-22\u00b0C (opt 19\u00b0C)"
+      "description": "Mean annual temperature °C",
+      "optimal_range": "17-22°C (opt 19°C)"
     },
     "soil": {
       "description": "Soil clay content SoilGrids g/kg",
@@ -77,7 +77,7 @@
     },
     "slope": {
       "description": "Terrain slope degrees",
-      "optimal_range": "0-5\u00b0 (max 15\u00b0)"
+      "optimal_range": "0-5° (max 15°)"
     }
   }
 }

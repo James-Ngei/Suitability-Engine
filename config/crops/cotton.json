@@ -20,9 +20,9 @@
         "a": 400,
         "b": 600,
         "c": 1000,
-        "d": 1300
+        "d": 1600
       },
-      "description": "Needs 600-1000mm; drought-tolerant but not arid"
+      "description": "Optimal 600-1000mm; tolerates up to 1600mm before waterlogging limits yield"
     },
     "temperature": {
       "type": "gaussian",
@@ -30,7 +30,7 @@
         "optimal": 27,
         "spread": 5
       },
-      "description": "Optimal 25-30\u00b0C; frost-sensitive"
+      "description": "Optimal 25-30°C; frost-sensitive"
     },
     "soil": {
       "type": "trapezoidal",
@@ -48,7 +48,7 @@
         "min_val": 0,
         "max_val": 15
       },
-      "description": "Flat to gently sloping; mechanisation limit 15\u00b0"
+      "description": "Flat to gently sloping; mechanisation limit 15°"
     }
   },
   "weights": {
@@ -68,8 +68,8 @@
       "optimal_range": "500-1200 m"
     },
     "temperature": {
-      "description": "Mean annual temperature \u00b0C",
-      "optimal_range": "25-30\u00b0C (opt 27\u00b0C)"
+      "description": "Mean annual temperature °C",
+      "optimal_range": "25-30°C (opt 27°C)"
     },
     "soil": {
       "description": "Soil clay content SoilGrids g/kg",
@@ -77,7 +77,7 @@
     },
     "slope": {
       "description": "Terrain slope degrees",
-      "optimal_range": "0-5\u00b0 (max 15\u00b0)"
+      "optimal_range": "0-5° (max 15°)"
     }
   }
 }

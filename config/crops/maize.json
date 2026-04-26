@@ -20,9 +20,9 @@
         "a": 500,
         "b": 700,
         "c": 1200,
-        "d": 1600
+        "d": 1800
       },
-      "description": "Needs 700-1200mm well-distributed"
+      "description": "Optimal 700-1200mm; tolerates up to 1800mm with good drainage"
     },
     "temperature": {
       "type": "gaussian",
@@ -30,7 +30,7 @@
         "optimal": 22,
         "spread": 6
       },
-      "description": "Optimal 18-26\u00b0C; sensitive to frost and extreme heat"
+      "description": "Optimal 18-26°C; sensitive to frost and extreme heat"
     },
     "soil": {
       "type": "trapezoidal",
@@ -48,7 +48,7 @@
         "min_val": 0,
         "max_val": 20
       },
-      "description": "Up to 20\u00b0 with terracing; mechanisation limit lower"
+      "description": "Up to 20° with terracing; mechanisation limit lower"
     }
   },
   "weights": {
@@ -68,8 +68,8 @@
       "optimal_range": "500-2000 m"
     },
     "temperature": {
-      "description": "Mean annual temperature \u00b0C",
-      "optimal_range": "18-26\u00b0C (opt 22\u00b0C)"
+      "description": "Mean annual temperature °C",
+      "optimal_range": "18-26°C (opt 22°C)"
     },
     "soil": {
       "description": "Soil clay content SoilGrids g/kg",
@@ -77,7 +77,7 @@
     },
     "slope": {
       "description": "Terrain slope degrees",
-      "optimal_range": "0-8\u00b0 (max 20\u00b0)"
+      "optimal_range": "0-8° (max 20°)"
     }
   }
 }

@@ -4,15 +4,6 @@ pc_fetcher.py
 Fetches all raster inputs for a county on demand from Planetary Computer
 and NASA POWER. Also fetches county boundary from OSM if not present.
 
-Boundary resolution order (no chicken-and-egg):
-  1. Already on disk  → use it
-  2. config["bbox"]   → fetch geometry from OSM using osm_relation_id
-  3. config["map_center"] ± offset → coarse bbox for raw fetch only,
-     then replace with OSM boundary after rasters land
-
-Usage:
-    python src/pc_fetcher.py           # status check
-    python src/pc_fetcher.py --fetch   # download all missing layers
 """
 
 import logging
@@ -20,7 +11,7 @@ import math
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import requests
@@ -33,8 +24,9 @@ logger = logging.getLogger("pc-fetcher")
 
 _PC_CATALOG_URL  = "https://planetarycomputer.microsoft.com/api/stac/v1"
 _NASA_POWER_URL  = "https://power.larc.nasa.gov/api/temporal/climatology/point"
-_DEFAULT_RES     = 0.005   # degrees (~500 m)
-_POWER_GRID_STEP = 0.25    # sample every 0.25°
+_DEFAULT_RES     = 0.005
+_POWER_GRID_STEP = 0.1   # fixed — gives ≥9 points even for tiny counties
+_ISRIC_GRID_STEP = 0.15
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -59,15 +51,6 @@ def layer_is_cached(config: dict, name: str) -> bool:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fetch_boundary(config: dict) -> Path:
-    """
-    Fetch the county boundary polygon from OSM and save as GeoPackage.
-
-    Resolution order:
-      1. config["osm_relation_id"]  → fetch from Overpass API
-      2. config["bbox"] + convex hull → rectangular fallback polygon
-
-    The file is saved to paths["boundary"] and returned.
-    """
     import geopandas as gpd
     import shapely.geometry as geom
     from shapely.ops import unary_union
@@ -79,7 +62,6 @@ def fetch_boundary(config: dict) -> Path:
 
     relation_id = config.get("osm_relation_id")
 
-    # ── Try Overpass ─────────────────────────────────────────────────────────
     if relation_id:
         logger.info(f"[{county}] Fetching boundary from OSM relation {relation_id}")
         overpass_mirrors = [
@@ -87,9 +69,7 @@ def fetch_boundary(config: dict) -> Path:
             "https://overpass.kumi.systems/api/interpreter",
             "https://overpass.private.coffee/api/interpreter",
         ]
-        # fetch_boundary fetches the full geometry of the relation
         query = f"[out:json][timeout:30];relation({relation_id});out geom;"
-
         raw_json = None
         for mirror in overpass_mirrors:
             try:
@@ -109,8 +89,7 @@ def fetch_boundary(config: dict) -> Path:
                 logger.info(f"[{county}] Boundary saved from OSM: {output_path.name}")
                 return output_path
 
-    # ── Fallback: rectangular bbox polygon ────────────────────────────────────
-    logger.warning(f"[{county}] OSM boundary fetch failed — using bbox rectangle as fallback")
+    logger.warning(f"[{county}] OSM boundary fetch failed — using bbox rectangle")
     west, south, east, north = _bbox_from_config(config)
     box = geom.box(west, south, east, north)
     gdf = gpd.GeoDataFrame({"geometry": [box]}, crs="EPSG:4326")
@@ -120,10 +99,6 @@ def fetch_boundary(config: dict) -> Path:
 
 
 def _overpass_to_gdf(raw_json: dict, county: str):
-    """
-    Convert Overpass JSON (relation with geometry) to a GeoDataFrame.
-    Handles relations returned with 'out geom' — members have geometry inline.
-    """
     try:
         import geopandas as gpd
         import shapely.geometry as geom
@@ -134,10 +109,7 @@ def _overpass_to_gdf(raw_json: dict, county: str):
         if not elements:
             return None
 
-        rel = elements[0]
-        members = rel.get("members", [])
-
-        # Collect outer/inner way geometries
+        members     = elements[0].get("members", [])
         outer_lines = []
         inner_lines = []
         for m in members:
@@ -147,72 +119,46 @@ def _overpass_to_gdf(raw_json: dict, county: str):
             if len(coords) < 2:
                 continue
             line = geom.LineString(coords)
-            role = m.get("role", "outer")
-            if role == "inner":
-                inner_lines.append(line)
-            else:
-                outer_lines.append(line)
+            (inner_lines if m.get("role") == "inner" else outer_lines).append(line)
 
-        # Polygonize outer rings
-        merged_outer = unary_union(outer_lines)
-        outer_polys  = list(polygonize(merged_outer))
-        if not outer_polys:
-            # Try treating as a single ring
-            if outer_lines:
-                coords = []
-                for line in outer_lines:
-                    coords.extend(list(line.coords))
-                try:
-                    poly = geom.Polygon(coords)
-                    outer_polys = [poly]
-                except Exception:
-                    pass
+        outer_polys = list(polygonize(unary_union(outer_lines)))
+        if not outer_polys and outer_lines:
+            coords = []
+            for line in outer_lines:
+                coords.extend(list(line.coords))
+            try:
+                outer_polys = [geom.Polygon(coords)]
+            except Exception:
+                pass
 
         if not outer_polys:
             return None
 
         boundary_poly = make_valid(unary_union(outer_polys))
-        gdf = gpd.GeoDataFrame(
+        return gpd.GeoDataFrame(
             {"name": [f"{county.capitalize()} County"], "geometry": [boundary_poly]},
             crs="EPSG:4326",
         )
-        return gdf
-
     except Exception as e:
         logger.warning(f"Overpass → GeoDataFrame failed: {e}")
         return None
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Bounding box — always from config, never requires boundary file first
+# Bounding box
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _bbox_from_config(config: dict) -> Tuple[float, float, float, float]:
-    """
-    Return (west, south, east, north) from config["bbox"] with a small buffer.
-    Falls back to map_center ± 1.5° if bbox not in config.
-    Never reads the boundary file — eliminates the chicken-and-egg problem.
-    """
     bbox = config.get("bbox")
     if bbox:
-        buf = 0.05   # ~5km buffer
-        return (
-            bbox["west"]  - buf,
-            bbox["south"] - buf,
-            bbox["east"]  + buf,
-            bbox["north"] + buf,
-        )
-    # Last resort: map_center offset
+        buf = 0.05
+        return (bbox["west"] - buf, bbox["south"] - buf,
+                bbox["east"] + buf, bbox["north"] + buf)
     lat, lon = config["map_center"]
-    offset   = 1.5
-    return (lon - offset, lat - offset, lon + offset, lat + offset)
+    return (lon - 1.5, lat - 1.5, lon + 1.5, lat + 1.5)
 
 
 def _get_bbox(config: dict) -> Tuple[float, float, float, float]:
-    """
-    Public bbox accessor used throughout the module.
-    Prefers boundary file (accurate) then config bbox (fast, no file needed).
-    """
     bp = config["_paths"]["boundary"]
     if bp.exists():
         try:
@@ -220,12 +166,10 @@ def _get_bbox(config: dict) -> Tuple[float, float, float, float]:
             gdf = gpd.read_file(bp)
             if str(gdf.crs) != "EPSG:4326":
                 gdf = gdf.to_crs("EPSG:4326")
-            b   = gdf.total_bounds
-            buf = 0.05
-            return (b[0] - buf, b[1] - buf, b[2] + buf, b[3] + buf)
+            b = gdf.total_bounds
+            return (b[0] - 0.05, b[1] - 0.05, b[2] + 0.05, b[3] + 0.05)
         except Exception as e:
             logger.warning(f"Could not read boundary file: {e}")
-
     return _bbox_from_config(config)
 
 
@@ -300,10 +244,7 @@ def fetch_elevation(config: dict, output_path: Path) -> Path:
     logger.info("── Fetching elevation (COP-DEM GLO-30) ──────────────────")
     bbox    = _get_bbox(config)
     catalog = _get_pc_catalog()
-
-    items = list(catalog.search(
-        collections=["cop-dem-glo-30"], bbox=bbox,
-    ).items())
+    items   = list(catalog.search(collections=["cop-dem-glo-30"], bbox=bbox).items())
     if not items:
         raise RuntimeError("No COP-DEM tiles found")
 
@@ -319,7 +260,7 @@ def fetch_elevation(config: dict, output_path: Path) -> Path:
         mosaic_path = tile_paths[0]
     else:
         logger.info(f"  Mosaicking {len(tile_paths)} tiles...")
-        srcs = [rasterio.open(p) for p in tile_paths]
+        srcs      = [rasterio.open(p) for p in tile_paths]
         mosaic, t = merge(srcs, method="first")
         for s in srcs:
             s.close()
@@ -363,19 +304,17 @@ def fetch_slope(config: dict, elevation_path: Path, output_path: Path) -> Path:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# NASA POWER grid sampler + interpolator
+# NASA POWER — shared grid sampler
 # ══════════════════════════════════════════════════════════════════════════════
 
-def _power_fetch_point(lon: float, lat: float, parameter: str) -> float:
+def _power_fetch_point(lon: float, lat: float, parameter: str) -> Optional[float]:
     url = (
         f"{_NASA_POWER_URL}"
-        f"?parameters={parameter}"
-        f"&community=AG"
-        f"&longitude={lon:.4f}&latitude={lat:.4f}"
-        f"&format=JSON"
+        f"?parameters={parameter}&community=AG"
+        f"&longitude={lon:.4f}&latitude={lat:.4f}&format=JSON"
     )
     try:
-        r = requests.get(url, timeout=20)
+        r   = requests.get(url, timeout=20)
         r.raise_for_status()
         val = r.json()["properties"]["parameter"][parameter].get("ANN")
         return float(val) if val is not None and val != -999 else None
@@ -390,44 +329,54 @@ def _power_to_raster(config: dict, parameter: str,
 
     west, south, east, north = _get_bbox(config)
     res  = config.get("resolution", _DEFAULT_RES)
-    step = _POWER_GRID_STEP
 
+    step = _POWER_GRID_STEP   # fixed 0.1°
     lons = np.arange(west  + step / 2, east,  step)
     lats = np.arange(south + step / 2, north, step)
+
+    # Guarantee minimum 3×3 = 9 points
+    if len(lons) < 3:
+        lons = np.linspace(west + 0.03, east - 0.03, 4)
+    if len(lats) < 3:
+        lats = np.linspace(south + 0.03, north - 0.03, 4)
+
     logger.info(f"  Sampling {len(lons)*len(lats)} points ({len(lons)}×{len(lats)} grid)")
 
     pts_lon, pts_lat, pts_val = [], [], []
-    for lat in lats:
-        for lon in lons:
-            val = _power_fetch_point(lon, lat, parameter)
+    for lat_pt in lats:
+        for lon_pt in lons:
+            val = _power_fetch_point(lon_pt, lat_pt, parameter)
             if val is not None:
-                if transform_fn:
-                    val = transform_fn(val)
-                pts_lon.append(lon)
-                pts_lat.append(lat)
-                pts_val.append(val)
+                pts_lon.append(lon_pt)
+                pts_lat.append(lat_pt)
+                pts_val.append(transform_fn(val) if transform_fn else val)
 
-    if len(pts_val) < 3:
+    if not pts_val:
         raise RuntimeError(
-            f"NASA POWER: only {len(pts_val)} valid points for {parameter}. "
-            f"Check API access."
+            f"NASA POWER: no valid points for {parameter}. "
+            f"Bbox: {west:.2f},{south:.2f},{east:.2f},{north:.2f}"
         )
 
-    logger.info(f"  {len(pts_val)} valid samples — range {min(pts_val):.1f}–{max(pts_val):.1f}")
+    logger.info(f"  {len(pts_val)} valid — range {min(pts_val):.1f}–{max(pts_val):.1f}")
 
     out_w = max(int((east - west)  / res), 10)
     out_h = max(int((north - south) / res), 10)
     t     = from_bounds(west, south, east, north, out_w, out_h)
-
     col_c = np.linspace(west  + res / 2, east  - res / 2, out_w)
     row_c = np.linspace(north - res / 2, south + res / 2, out_h)
     gx, gy = np.meshgrid(col_c, row_c)
-
     pts    = np.column_stack([pts_lon, pts_lat])
-    interp = griddata(pts, pts_val, (gx, gy), method="cubic")
-    nans   = np.isnan(interp)
-    if nans.any():
-        interp[nans] = griddata(pts, pts_val, (gx[nans], gy[nans]), method="linear")
+
+    if len(pts_val) >= 4:
+        interp = griddata(pts, pts_val, (gx, gy), method="cubic")
+        nans   = np.isnan(interp)
+        if nans.any():
+            interp[nans] = griddata(pts, pts_val, (gx[nans], gy[nans]), method="linear")
+    elif len(pts_val) >= 3:
+        interp = griddata(pts, pts_val, (gx, gy), method="linear")
+    else:
+        interp = np.full_like(gx, float(np.mean(pts_val)))
+
     nans = np.isnan(interp)
     if nans.any():
         interp[nans] = griddata(pts, pts_val, (gx[nans], gy[nans]), method="nearest")
@@ -459,24 +408,23 @@ def fetch_temperature(config: dict, output_path: Path) -> Path:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Soil
+# Soil — PC first, ISRIC spatial grid fallback
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fetch_soil(config: dict, output_path: Path) -> Path:
     logger.info("── Fetching soil clay (SoilGrids / PC) ──────────────────")
     bbox    = _get_bbox(config)
     catalog = _get_pc_catalog()
-
-    items = list(catalog.search(collections=["soilgrids"], bbox=bbox).items())
-    clay  = [i for i in items
-             if "clay" in i.id.lower() and ("0-30" in i.id or "030" in i.id)]
+    items   = list(catalog.search(collections=["soilgrids"], bbox=bbox).items())
+    clay    = [i for i in items
+               if "clay" in i.id.lower() and ("0-30" in i.id or "030" in i.id)]
     if not clay:
         clay = [i for i in items if "clay" in i.id.lower()]
     if not clay:
         raise RuntimeError("No SoilGrids clay items on PC")
 
     logger.info(f"  {len(clay)} item(s)")
-    tmp = Path(tempfile.mkdtemp(prefix="pc_soil_"))
+    tmp        = Path(tempfile.mkdtemp(prefix="pc_soil_"))
     tile_paths = []
     for item in clay:
         key = next(
@@ -496,7 +444,7 @@ def fetch_soil(config: dict, output_path: Path) -> Path:
     if len(tile_paths) == 1:
         raw_path = tile_paths[0]
     else:
-        srcs = [rasterio.open(p) for p in tile_paths]
+        srcs      = [rasterio.open(p) for p in tile_paths]
         mosaic, t = merge(srcs, method="first")
         for s in srcs:
             s.close()
@@ -513,52 +461,139 @@ def fetch_soil(config: dict, output_path: Path) -> Path:
         nd        = src.nodata if src.nodata is not None else -9999
 
     valid    = (data != nd) & np.isfinite(data)
+    # PC SoilGrids stores values as g/kg * 10 — divide by 10 to get g/kg
     clay_gkg = np.where(valid, data / 10.0, nd)
-
-    conv = tmp / "soil_conv.tif"
+    conv     = tmp / "soil_conv.tif"
     _save_layer(clay_gkg, transform, crs, conv, nodata=nd)
     _reproject_to_wgs84(conv, output_path,
                          resolution=config.get("resolution", _DEFAULT_RES),
                          resampling=Resampling.nearest)
-    logger.info(f"  ✅ Soil: {output_path.name}")
+    logger.info(f"  ✅ Soil (PC): {output_path.name}")
     return output_path
 
 
-def _fetch_soil_isric_fallback(config: dict, output_path: Path) -> Path:
-    logger.info("── Fetching soil clay (ISRIC fallback) ──────────────────")
-    west, south, east, north = _get_bbox(config)
-    res = config.get("resolution", _DEFAULT_RES)
+def _fetch_isric_point(lon: float, lat: float) -> Optional[float]:
+    """
+    Fetch clay content (g/kg) from SoilGrids v2 REST API.
 
-    west  = math.floor(west  / res) * res
-    south = math.floor(south / res) * res
-    east  = math.ceil(east   / res) * res
-    north = math.ceil(north  / res) * res
-    w = round((east - west) / res)
-    h = round((north - south) / res)
+    IMPORTANT — unit handling:
+    The SoilGrids v2 REST API returns values ALREADY converted to the mapped
+    unit (g/kg). The d_factor division has been applied server-side.
+    Do NOT divide by d_factor again — that was the previous bug causing
+    values like 350 g/kg to appear as 35 g/kg.
 
-    lat, lon = (south + north) / 2, (west + east) / 2
-    clay_gkg = 250.0
+    Depth params: SoilGrids v2 uses individual depth labels, not ranges.
+    Valid values: "0-5cm", "5-15cm", "15-30cm", "30-60cm", "60-100cm", "100-200cm"
+    We query 0-5cm and 5-15cm and average them to represent topsoil.
+
+    val=0 is valid (very sandy soils) — do NOT filter with val > 0.
+    """
+    url = (
+        "https://rest.isric.org/soilgrids/v2.0/properties/query"
+        f"?lon={lon:.4f}&lat={lat:.4f}"
+        "&property=clay"
+        "&depth=0-5cm&depth=5-15cm"
+        "&value=mean"
+    )
     try:
-        url  = (f"https://rest.isric.org/soilgrids/v2.0/properties/query"
-                f"?lon={lon:.4f}&lat={lat:.4f}"
-                f"&property=clay&depth=0-30cm&value=mean")
-        resp = requests.get(url, timeout=30)
-        resp.raise_for_status()
-        layers = resp.json().get("properties", {}).get("layers", [])
-        for layer in layers:
-            if layer.get("name") == "clay":
-                for depth in layer.get("depths", []):
-                    val = depth.get("values", {}).get("mean")
-                    if val is not None:
-                        clay_gkg = float(val) / 10.0
-                        break
-                break
-    except Exception as e:
-        logger.warning(f"  ISRIC: {e} — using 250 g/kg")
+        r = requests.get(url, timeout=25, headers={"Accept": "application/json"})
+        r.raise_for_status()
+        data = r.json()
 
-    t = from_bounds(west, south, east, north, w, h)
-    _save_layer(np.full((h, w), clay_gkg, dtype=np.float32), t, "EPSG:4326", output_path)
-    logger.info(f"  ✅ Soil (ISRIC {clay_gkg:.0f} g/kg): {output_path.name}")
+        layers     = data.get("properties", {}).get("layers", [])
+        clay_layer = next((l for l in layers if l.get("name") == "clay"), None)
+        if clay_layer is None:
+            return None
+
+        depths = clay_layer.get("depths", [])
+        values = []
+        for depth_entry in depths:
+            label    = depth_entry.get("label", "")
+            mean_val = depth_entry.get("values", {}).get("mean")
+            # Accept 0-5cm and 5-15cm; use `is not None` so sandy soils (0 g/kg) are valid
+            if label in ("0-5cm", "5-15cm") and mean_val is not None:
+                # REST API returns value already in g/kg — NO d_factor division needed
+                values.append(float(mean_val))
+
+        return float(np.mean(values)) if values else None
+
+    except Exception as e:
+        logger.debug(f"  ISRIC point ({lon:.2f},{lat:.2f}) failed: {e}")
+        return None
+
+
+def _fetch_soil_isric_fallback(config: dict, output_path: Path) -> Path:
+    """
+    Spatial ISRIC SoilGrids v2 fallback — samples a grid and interpolates.
+    Returns real spatial variation. The constant-fill fallback is only used
+    if all API calls fail completely.
+    """
+    from scipy.interpolate import griddata
+    logger.info("── Fetching soil clay (ISRIC spatial grid fallback) ─────")
+
+    west, south, east, north = _get_bbox(config)
+    res  = config.get("resolution", _DEFAULT_RES)
+
+    step = _ISRIC_GRID_STEP
+    lons = np.arange(west  + step / 2, east,  step)
+    lats = np.arange(south + step / 2, north, step)
+
+    if len(lons) < 3:
+        lons = np.linspace(west + 0.04, east - 0.04, 4)
+    if len(lats) < 3:
+        lats = np.linspace(south + 0.04, north - 0.04, 4)
+
+    total = len(lons) * len(lats)
+    logger.info(f"  Sampling {total} ISRIC points ({len(lons)}×{len(lats)} grid)")
+
+    pts_lon, pts_lat, pts_val = [], [], []
+    for lat_pt in lats:
+        for lon_pt in lons:
+            val = _fetch_isric_point(lon_pt, lat_pt)
+            if val is not None:
+                pts_lon.append(lon_pt)
+                pts_lat.append(lat_pt)
+                pts_val.append(val)
+
+    logger.info(f"  {len(pts_val)}/{total} ISRIC points valid")
+
+    out_w = max(int((east - west)  / res), 10)
+    out_h = max(int((north - south) / res), 10)
+    t     = from_bounds(west, south, east, north, out_w, out_h)
+    col_c = np.linspace(west  + res / 2, east  - res / 2, out_w)
+    row_c = np.linspace(north - res / 2, south + res / 2, out_h)
+    gx, gy = np.meshgrid(col_c, row_c)
+
+    if len(pts_val) >= 4:
+        pts    = np.column_stack([pts_lon, pts_lat])
+        interp = griddata(pts, pts_val, (gx, gy), method="cubic")
+        nans   = np.isnan(interp)
+        if nans.any():
+            interp[nans] = griddata(pts, pts_val, (gx[nans], gy[nans]), method="linear")
+        nans = np.isnan(interp)
+        if nans.any():
+            interp[nans] = griddata(pts, pts_val, (gx[nans], gy[nans]), method="nearest")
+        clay_data = np.clip(interp, 0, 1000).astype(np.float32)
+        logger.info(
+            f"  ISRIC interpolated: range {clay_data.min():.0f}–{clay_data.max():.0f} g/kg "
+            f"mean {clay_data.mean():.0f} g/kg"
+        )
+    elif len(pts_val) >= 1:
+        mean_val  = float(np.mean(pts_val))
+        clay_data = np.full((out_h, out_w), mean_val, dtype=np.float32)
+        logger.warning(
+            f"  ISRIC: only {len(pts_val)} point(s) — "
+            f"uniform fill at {mean_val:.0f} g/kg"
+        )
+    else:
+        clay_data = np.full((out_h, out_w), 280.0, dtype=np.float32)
+        logger.warning(
+            "  ISRIC: all points failed — using 280 g/kg constant. "
+            "Check network access to rest.isric.org"
+        )
+
+    _save_layer(clay_data, t, "EPSG:4326", output_path)
+    logger.info(f"  ✅ Soil (ISRIC spatial): {output_path.name}")
     return output_path
 
 
@@ -567,10 +602,6 @@ def _fetch_soil_isric_fallback(config: dict, output_path: Path) -> Path:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def fetch_all_layers(config: dict, force: bool = False) -> Dict[str, Path]:
-    """
-    Fetch all raw raster layers + boundary for a county.
-    Boundary is fetched first so the pipeline has an accurate clip polygon.
-    """
     paths, county = config["_paths"], config["county"]
     raw_dir = paths["raw_dir"]
     raw_dir.mkdir(parents=True, exist_ok=True)
@@ -579,19 +610,15 @@ def fetch_all_layers(config: dict, force: bool = False) -> Dict[str, Path]:
     logger.info(f"  PC FETCHER: {config['display_name'].upper()}")
     logger.info("=" * 55)
 
-    # ── Step 0: boundary (needed by all pipeline scripts) ─────────────────────
     boundary_path = paths["boundary"]
     if not boundary_path.exists() or force:
-        logger.info(f"[{county}] Fetching boundary polygon...")
         try:
             fetch_boundary(config)
         except Exception as e:
             logger.error(f"[{county}] Boundary fetch failed: {e}")
-            logger.warning(f"[{county}] Pipeline will use bbox rectangle — rasters will not be clipped to exact county shape")
     else:
-        logger.info(f"[{county}] Boundary already cached: {boundary_path.name}")
+        logger.info(f"[{county}] Boundary cached: {boundary_path.name}")
 
-    # ── Step 1–5: raster layers ────────────────────────────────────────────────
     fetched = {}
 
     def out(n):
@@ -614,8 +641,7 @@ def fetch_all_layers(config: dict, force: bool = False) -> Dict[str, Path]:
         cached("slope")
     else:
         try:
-            elev_path = fetched.get("elevation") or out("elevation")
-            fetch_slope(config, elev_path, out("slope"))
+            fetch_slope(config, fetched.get("elevation") or out("elevation"), out("slope"))
             fetched["slope"] = out("slope")
         except Exception as e:
             logger.warning(f"  Slope: {e}")
@@ -645,12 +671,12 @@ def fetch_all_layers(config: dict, force: bool = False) -> Dict[str, Path]:
             fetch_soil(config, out("soil"))
             fetched["soil"] = out("soil")
         except Exception as e:
-            logger.warning(f"  PC soil: {e} — trying ISRIC...")
+            logger.warning(f"  PC soil: {e} — trying ISRIC spatial grid...")
             try:
                 _fetch_soil_isric_fallback(config, out("soil"))
                 fetched["soil"] = out("soil")
             except Exception as e2:
-                logger.warning(f"  ISRIC: {e2}")
+                logger.warning(f"  ISRIC spatial: {e2}")
 
     missing = set(config["layers"]) - set(fetched)
     logger.info(f"\n  Fetched : {sorted(fetched)}")
@@ -672,7 +698,6 @@ if __name__ == "__main__":
     config = load_config()
     logger.info(f"County: {config['display_name']}")
     logger.info(f"Bbox:   {_get_bbox(config)}")
-
     logger.info(f"Boundary cached: {config['_paths']['boundary'].exists()}")
     logger.info(f"Layers cached:   {layers_are_cached(config)}")
     for name in config["layers"]:

@@ -20,9 +20,9 @@
         "a": 500,
         "b": 700,
         "c": 1200,
-        "d": 1600
+        "d": 1800
       },
-      "description": "700-1200mm; more drought-tolerant than maize"
+      "description": "Optimal 700-1200mm; more drought-tolerant than maize, tolerates up to 1800mm"
     },
     "temperature": {
       "type": "gaussian",
@@ -30,7 +30,7 @@
         "optimal": 23,
         "spread": 6
       },
-      "description": "Warm to cool; optimal 20-26\u00b0C"
+      "description": "Warm to cool; optimal 20-26°C"
     },
     "soil": {
       "type": "trapezoidal",
@@ -68,8 +68,8 @@
       "optimal_range": "500-2000 m"
     },
     "temperature": {
-      "description": "Mean annual temperature \u00b0C",
-      "optimal_range": "20-26\u00b0C (opt 23\u00b0C)"
+      "description": "Mean annual temperature °C",
+      "optimal_range": "20-26°C (opt 23°C)"
     },
     "soil": {
       "description": "Soil clay content SoilGrids g/kg",
@@ -77,7 +77,7 @@
     },
     "slope": {
       "description": "Terrain slope degrees",
-      "optimal_range": "0-15\u00b0 (max 25\u00b0)"
+      "optimal_range": "0-15° (max 25°)"
     }
   }
 }

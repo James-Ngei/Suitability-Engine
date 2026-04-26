@@ -68,13 +68,13 @@ function App() {
       axios.get(`${API_BASE_URL}/criteria?crop=${activeCrop||'cotton'}&county=${countyId}`)
         .then(r => setCriteria(r.data)).catch(() => {});
     }
+    // Always clear the previous analysis and reset to suitability layer.
+    // The suitability layer safely shows "run analysis first" when there's no result.
     setAnalysisResult(null);
     setNewResultReady(false);
     setPdfBlobUrl(null);
     setReportOverlay(false);
-    // Keep activeLayer if it's a factor layer — useful to see same factor for new county
-    // Only reset if on suitability since there's no result for new county
-    if (activeLayer === 'suitability') setActiveLayer('elevation');
+    setActiveLayer('suitability');
   };
 
   // Crop changed from AnalysisSetup
@@ -87,11 +87,14 @@ function App() {
     setNewResultReady(false);
     setPdfBlobUrl(null);
     setReportOverlay(false);
+    // Reset to suitability on crop change too — no stale overlay
+    setActiveLayer('suitability');
   };
 
   // Layer changed from AnalysisSetup
   const handleLayerChange = (layerId) => {
     setActiveLayer(layerId);
+    // Clear the NEW badge only when the user explicitly switches to suitability
     if (layerId === 'suitability') setNewResultReady(false);
   };
 
@@ -125,14 +128,12 @@ function App() {
       });
       setAnalysisResult(r.data);
 
-      // Smart layer switch:
-      // If user was on a factor layer → keep it, show NEW badge on suitability
-      // If user was already on suitability → update to new result (natural)
+      // After analysis completes:
+      // - If already on suitability layer → new result loads automatically, no badge needed
+      // - If on a factor layer → keep viewing it but show NEW badge on suitability
       if (activeLayer === 'suitability') {
-        // stays on suitability, new result loads automatically via URL change
         setNewResultReady(false);
       } else {
-        // stays on whatever factor layer they were viewing
         setNewResultReady(true);
       }
     } catch (err) {

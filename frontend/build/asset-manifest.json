@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/Suitability-Engine/static/css/main.545fa85f.css",
-    "main.js": "/Suitability-Engine/static/js/main.74d8d5b2.js",
+    "main.css": "/Suitability-Engine/static/css/main.dcb48a42.css",
+    "main.js": "/Suitability-Engine/static/js/main.cb130046.js",
     "index.html": "/Suitability-Engine/index.html",
-    "main.545fa85f.css.map": "/Suitability-Engine/static/css/main.545fa85f.css.map",
-    "main.74d8d5b2.js.map": "/Suitability-Engine/static/js/main.74d8d5b2.js.map"
+    "main.dcb48a42.css.map": "/Suitability-Engine/static/css/main.dcb48a42.css.map",
+    "main.cb130046.js.map": "/Suitability-Engine/static/js/main.cb130046.js.map"
   },
   "entrypoints": [
-    "static/css/main.545fa85f.css",
-    "static/js/main.74d8d5b2.js"
+    "static/css/main.dcb48a42.css",
+    "static/js/main.cb130046.js"
   ]
 }

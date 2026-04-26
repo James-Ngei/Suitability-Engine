@@ -20,9 +20,9 @@
         "a": 300,
         "b": 450,
         "c": 750,
-        "d": 1000
+        "d": 1200
       },
-      "description": "Drought-tolerant; 450-750mm optimal"
+      "description": "Drought-tolerant; optimal 450-750mm, tolerates up to 1200mm"
     },
     "temperature": {
       "type": "gaussian",
@@ -30,7 +30,7 @@
         "optimal": 29,
         "spread": 5
       },
-      "description": "Warm crop; optimal 25-33\u00b0C"
+      "description": "Warm crop; optimal 25-33°C"
     },
     "soil": {
       "type": "trapezoidal",
@@ -68,8 +68,8 @@
       "optimal_range": "0-1400 m"
     },
     "temperature": {
-      "description": "Mean annual temperature \u00b0C",
-      "optimal_range": "25-33\u00b0C (opt 29\u00b0C)"
+      "description": "Mean annual temperature °C",
+      "optimal_range": "25-33°C (opt 29°C)"
     },
     "soil": {
       "description": "Soil clay content SoilGrids g/kg",
@@ -77,7 +77,7 @@
     },
     "slope": {
       "description": "Terrain slope degrees",
-      "optimal_range": "0-10\u00b0 (max 20\u00b0)"
+      "optimal_range": "0-10° (max 20°)"
     }
   }
 }

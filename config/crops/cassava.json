@@ -20,9 +20,9 @@
         "a": 500,
         "b": 750,
         "c": 1500,
-        "d": 2000
+        "d": 2200
       },
-      "description": "750-1500mm optimal; tolerates 500mm"
+      "description": "Optimal 750-1500mm; tolerates up to 2200mm if drainage is adequate"
     },
     "temperature": {
       "type": "gaussian",
@@ -30,7 +30,7 @@
         "optimal": 27,
         "spread": 6
       },
-      "description": "Optimal 25-29\u00b0C; tolerant of high temps"
+      "description": "Optimal 25-29°C; tolerant of high temps"
     },
     "soil": {
       "type": "trapezoidal",
@@ -68,8 +68,8 @@
       "optimal_range": "0-1500 m"
     },
     "temperature": {
-      "description": "Mean annual temperature \u00b0C",
-      "optimal_range": "25-29\u00b0C (opt 27\u00b0C)"
+      "description": "Mean annual temperature °C",
+      "optimal_range": "25-29°C (opt 27°C)"
     },
     "soil": {
       "description": "Soil clay content SoilGrids g/kg",
@@ -77,7 +77,7 @@
     },
     "slope": {
       "description": "Terrain slope degrees",
-      "optimal_range": "0-12\u00b0 (max 25\u00b0)"
+      "optimal_range": "0-12° (max 25°)"
     }
   }
 }

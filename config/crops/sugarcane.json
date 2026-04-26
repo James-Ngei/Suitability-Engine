@@ -20,9 +20,9 @@
         "a": 1000,
         "b": 1400,
         "c": 2000,
-        "d": 2500
+        "d": 2800
       },
-      "description": "High water demand; 1400-2000mm"
+      "description": "High water demand; optimal 1400-2000mm, tolerates up to 2800mm"
     },
     "temperature": {
       "type": "gaussian",
@@ -30,7 +30,7 @@
         "optimal": 28,
         "spread": 5
       },
-      "description": "Tropical crop; optimal 24-32\u00b0C"
+      "description": "Tropical crop; optimal 24-32°C"
     },
     "soil": {
       "type": "trapezoidal",
@@ -48,7 +48,7 @@
         "min_val": 0,
         "max_val": 8
       },
-      "description": "Mechanised crop; slopes above 8\u00b0 impractical"
+      "description": "Mechanised crop; slopes above 8° impractical"
     }
   },
   "weights": {
@@ -68,8 +68,8 @@
       "optimal_range": "0-1200 m"
     },
     "temperature": {
-      "description": "Mean annual temperature \u00b0C",
-      "optimal_range": "24-32\u00b0C (opt 28\u00b0C)"
+      "description": "Mean annual temperature °C",
+      "optimal_range": "24-32°C (opt 28°C)"
     },
     "soil": {
       "description": "Soil clay content SoilGrids g/kg",
@@ -77,7 +77,7 @@
     },
     "slope": {
       "description": "Terrain slope degrees",
-      "optimal_range": "0-3\u00b0 (max 8\u00b0)"
+      "optimal_range": "0-3° (max 8°)"
     }
   }
 }

@@ -28,6 +28,7 @@ from typing import Dict, Optional
 import geopandas as gpd
 import numpy as np
 import rasterio
+import matplotlib.pyplot as plt
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
@@ -767,66 +768,100 @@ async def get_map_image(analysis_id: str, county: Optional[str] = Query(None), c
 
 # ── Criterion colormaps (matches map_renderer.py) ─────────────────────────────
 _CRITERION_CMAPS = {
-    'elevation':   'terrain',
-    'rainfall':    'YlGnBu',
-    'temperature': 'RdYlBu_r',
+    'elevation':   'YlGn',
+    'rainfall':    'Blues',
+    'temperature': 'OrRd',
     'soil':        'YlOrBr',
-    'slope':       'copper_r',
+    'slope':       'Greys',
 }
 
 @app.get("/layer-image/{county}/{layer_name}")
 async def get_layer_image(county: str, layer_name: str):
     """
-    Render a single normalized criterion layer as a georeferenced RGBA PNG.
-    Uses the same bounds as /map-image so Leaflet ImageOverlay works identically.
-    Layers are read from the in-memory county cache — no disk I/O, ~50ms response.
-
-    layer_name: elevation | rainfall | temperature | soil | slope
+    Render a single normalized criterion layer (0-100) as a georeferenced RGBA PNG.
+ 
+    Rendering:
+    - Pixels inside the county boundary → fully opaque, colored by score.
+      Score=0 (below/above threshold) renders as the LIGHT end of the colormap,
+      not transparent. This eliminates white holes in rainfall/elevation maps.
+    - Pixels outside the county bbox → transparent (alpha=0).
     """
     c = county.strip().lower()
     cache = COUNTY_CACHE.get(c)
     if not cache:
         st = COUNTY_STATUS.get(c, {})
         raise HTTPException(
-            status_code=503 if st.get("status") in ("fetching","pipeline") else 404,
+            status_code=503 if st.get("status") in ("fetching", "pipeline") else 404,
             detail=f"County '{c}' not loaded. Status: {st.get('status','idle')}"
         )
-
+ 
     layers = cache["layers"]
     if layer_name not in layers:
         raise HTTPException(
             status_code=404,
             detail=f"Layer '{layer_name}' not found. Available: {list(layers.keys())}"
         )
-
-    data  = layers[layer_name]          # numpy float32, 0-100, 0=nodata
-    valid = data > 0
-
-    if not valid.any():
-        raise HTTPException(status_code=404, detail=f"No valid pixels for '{layer_name}'")
-
-    # Apply matplotlib colormap
-    import matplotlib.pyplot as plt
-    import matplotlib.cm as cm
-    import matplotlib.colors as mcolors
-
-    cmap_name = _CRITERION_CMAPS.get(layer_name, 'viridis')
-    cmap      = plt.get_cmap(cmap_name)
-
-    # Normalise 0-100 → 0-1 for colormap, but only over valid pixels
-    normed        = np.zeros_like(data, dtype=np.float32)
-    normed[valid] = data[valid] / 100.0
-
-    rgba_float = cmap(normed)                            # H×W×4, float 0-1
-    rgba       = (rgba_float * 255).astype(np.uint8)
-
-    # Transparent outside county, semi-transparent inside
-    rgba[~valid, 3] = 0
-    rgba[valid,  3] = 210                                # slight transparency
-
-    img = Image.fromarray(rgba, mode="RGBA")
+ 
+    cfg       = load_config(c)
+    norm_path = cfg["_paths"]["normalized_layers"].get(layer_name)
+ 
+    # Load the normalized raster from disk so we have the exact nodata mask
+    if norm_path and norm_path.exists():
+        with rasterio.open(norm_path) as src:
+            norm_data     = src.read(1).astype(np.float32)
+            norm_transform = src.transform
+            norm_crs      = src.crs
+    else:
+        # Fall back to in-memory array (no separate nodata info available)
+        norm_data      = layers[layer_name].copy()
+        norm_transform = cache["profile"]["transform"]
+        norm_crs       = cache["profile"]["crs"]
+ 
+    h, w = norm_data.shape
+ 
+    # ── Determine which pixels are inside the county boundary ────────────────
+    # Strategy: reproject the constraint mask to match the normalized layer grid.
+    # constraint_mask=1 means inside county AND not protected.
+    # We use this as our "inside county" signal.
+    constraint_path = cfg["_paths"]["constraint_mask"]
+    inside_county   = np.ones((h, w), dtype=bool)  # default: treat all as inside
+ 
+    if constraint_path.exists():
+        with rasterio.open(constraint_path) as src:
+            if src.width == w and src.height == h:
+                # Same grid — use directly
+                inside_county = src.read(1) > 0
+            else:
+                # Different grid — reproject to match normalized layer
+                cmask_aligned = np.zeros((h, w), dtype=np.uint8)
+                reproject(
+                    source=rasterio.band(src, 1),
+                    destination=cmask_aligned,
+                    src_transform=src.transform,
+                    src_crs=src.crs,
+                    dst_transform=norm_transform,
+                    dst_crs=norm_crs,
+                    resampling=Resampling.nearest,
+                )
+                inside_county = cmask_aligned > 0
+ 
+    # ── Apply colormap ────────────────────────────────────────────────────────
+    cmap_name  = _CRITERION_CMAPS.get(layer_name, "viridis")
+    cmap       = plt.get_cmap(cmap_name)
+ 
+    # Normalize 0–100 → 0.0–1.0
+    normed     = np.clip(norm_data / 100.0, 0.0, 1.0)
+ 
+    # Apply colormap to ALL pixels — including score=0 ones inside the county.
+    # Those get the light (low) end of the gradient, not transparent.
+    rgba_float = cmap(normed)                           # H×W×4, floats 0–1
+    rgba       = (rgba_float * 255).astype(np.uint8)   # H×W×4, uint8
+ 
+    # ── Alpha: opaque inside county, transparent outside ─────────────────────
+    rgba[:, :, 3] = np.where(inside_county, 255, 0).astype(np.uint8)
+ 
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    Image.fromarray(rgba, mode="RGBA").save(buf, format="PNG")
     buf.seek(0)
     return Response(content=buf.read(), media_type="image/png")
 
