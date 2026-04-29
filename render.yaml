@@ -5,11 +5,16 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn src.api:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /ping
+    # Give Render extra time for startup — R2 sync happens in background
+    # but uvicorn itself needs ~10s to import rasterio/geopandas
     envVars:
       - key: SUITABILITY_DATA_DIR
         value: /tmp/suitability-engine
+      # Set to first county alphabetically (baringo) so the default shown
+      # in the frontend matches the first item in the county list.
+      # The startup background task will pull baringo from R2 on cold start.
       - key: ACTIVE_COUNTY
-        value: kitui
+        value: baringo
       - key: ACTIVE_CROP
         value: cotton
       - key: LLM_PROVIDER
@@ -26,3 +31,6 @@ services:
         value: suitability-engine
       - key: PYTHONUNBUFFERED
         value: "1"
+      # Log level — set to INFO so R2 sync steps are visible in Render logs
+      - key: LOG_LEVEL
+        value: INFO

@@ -1,28 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-/**
- * AnalysisSetup
- * -------------
- * Replaces three separate panels (CountySelector, CropSelector, map LayerToggle)
- * with one compact panel containing three inline label+dropdown rows.
- *
- * Layout:
- *   County  [Kitui County        ▼]
- *   Crop    [Cotton              ▼]
- *   Layer   [Suitability result  ▼]
- *
- * Props:
- *   apiBaseUrl        string
- *   currentCounty     string
- *   currentCrop       string
- *   activeLayer       string
- *   hasAnalysis       bool
- *   newResultReady    bool     — true briefly after analysis completes (shows badge)
- *   onCountyChange    fn(countyId, countyConfig)
- *   onCropChange      fn(cropId, cropMeta)
- *   onLayerChange     fn(layerName)
- */
-
 const LAYER_OPTIONS = [
   { id: 'suitability', label: 'Suitability result' },
   { id: 'elevation',   label: 'Elevation' },
@@ -51,34 +28,30 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
         display:     'flex',
         alignItems:  'center',
         gap:         '6px',
-        // Ensure the row itself never overflows the panel
         minWidth:    0,
         overflow:    'hidden',
       }}>
-        {/* Label — fixed width, never shrinks, never wraps */}
+        {/* Label */}
         <span style={{
           fontSize:      '0.68rem',
           fontWeight:    600,
           color:         '#7a8f68',
-          // Fixed width so it never squishes against the button border
           width:         '48px',
           minWidth:      '48px',
           flexShrink:    0,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
-          // Prevent the label text itself from wrapping
           whiteSpace:    'nowrap',
           overflow:      'hidden',
         }}>
           {label}
         </span>
 
-        {/* Trigger button — fills remaining space, clips long text with ellipsis */}
+        {/* Trigger button */}
         <button
           onClick={() => !disabled && setOpen(o => !o)}
           disabled={disabled}
           style={{
-            // Takes all remaining space but never pushes outside the panel
             flex:          '1 1 0',
             minWidth:      0,
             display:       'flex',
@@ -92,16 +65,13 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
             opacity:       disabled ? 0.5 : 1,
             transition:    'all 0.12s',
             gap:           '4px',
-            // Ensure the button itself clips rather than expanding
             overflow:      'hidden',
           }}
         >
-          {/* County/crop/layer name — truncates with ellipsis on overflow */}
           <span style={{
             fontSize:     '0.78rem',
             fontWeight:   600,
             color:        '#1a2010',
-            // flex: 1 with minWidth: 0 is the key combo for ellipsis to work in flex
             flex:         '1 1 0',
             minWidth:     0,
             textAlign:    'left',
@@ -112,7 +82,6 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
             {current?.label || '—'}
           </span>
 
-          {/* NEW badge — only shown when a fresh analysis result is waiting */}
           {badge && (
             <span style={{
               fontSize:     '0.55rem',
@@ -121,7 +90,6 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
               color:        '#ffffff',
               padding:      '1px 5px',
               borderRadius: '8px',
-              // Never shrink the badge — it's small enough already
               flexShrink:   0,
               letterSpacing:'0.03em',
               whiteSpace:   'nowrap',
@@ -130,12 +98,10 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
             </span>
           )}
 
-          {/* Chevron arrow */}
           <span style={{
             fontSize:  '0.55rem',
             color:     '#8a9a78',
             flexShrink: 0,
-            // Small gap from the text so the arrow doesn't crowd it
             marginLeft: '2px',
           }}>
             {open ? '▲' : '▼'}
@@ -147,7 +113,6 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
       {open && (
         <div style={{
           position:   'absolute',
-          // Align left edge with the button start (after the label)
           left:       '54px',
           right:      0,
           top:        'calc(100% + 3px)',
@@ -158,7 +123,6 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
           boxShadow:  '0 4px 16px rgba(0,0,0,0.13)',
           maxHeight:  '240px',
           overflowY:  'auto',
-          // Ensure dropdown itself never overflows viewport horizontally
           minWidth:   '140px',
         }}>
           {options.map(opt => (
@@ -195,7 +159,6 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
                 display:    'flex',
                 alignItems: 'center',
                 gap:        '6px',
-                // Allow long names to wrap inside the dropdown (it has enough width)
                 whiteSpace: 'normal',
                 wordBreak:  'break-word',
               }}>
@@ -203,7 +166,11 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
                   <span style={{ fontSize:'0.55rem', color:'#3d7a22', flexShrink: 0 }}>✓</span>
                 )}
                 {opt.label}
-                {opt.status && opt.status !== 'ready' && opt.status !== 'idle' && (
+                {/* Show status dot only for counties that are actively loading */}
+                {opt.status && opt.status === 'ready' && (
+                  <span style={{ fontSize:'0.6rem', color:'#3d7a22', marginLeft:'auto', flexShrink:0 }}>●</span>
+                )}
+                {opt.status && (opt.status === 'fetching' || opt.status === 'pipeline') && (
                   <span style={{
                     fontSize:    '0.58rem',
                     color:       '#b8860b',
@@ -212,8 +179,7 @@ function InlineDropdown({ label, value, options, onSelect, disabled, badge }) {
                     flexShrink:  0,
                     paddingLeft: '6px',
                   }}>
-                    {opt.status === 'fetching' || opt.status === 'pipeline'
-                      ? `${opt.pct||0}%` : opt.status}
+                    {opt.pct ? `${opt.pct}%` : 'loading…'}
                   </span>
                 )}
               </span>
@@ -242,69 +208,40 @@ function AnalysisSetup({
   activeLayer,
   hasAnalysis,
   newResultReady,
+  countyStatuses,   // { countyId: { status, pct } } — passed from App.js
   onCountyChange,
   onCropChange,
   onLayerChange,
 }) {
-  const [counties,      setCounties]      = useState([]);
-  const [crops,         setCrops]         = useState([]);
-  const [countyLoading, setCountyLoading] = useState(null);
-  const pollRef = useRef(null);
+  const [counties, setCounties] = useState([]);
+  const [crops,    setCrops]    = useState([]);
 
-  // Fetch county + crop lists
+  // Fetch county list (metadata only — no pipeline trigger)
   useEffect(() => {
-    fetch(`${apiBaseUrl}/counties`).then(r => r.json()).then(data => {
-      setCounties(data);
-    }).catch(() => {});
-    fetch(`${apiBaseUrl}/crops`).then(r => r.json()).then(setCrops).catch(() => {});
+    fetch(`${apiBaseUrl}/counties`)
+      .then(r => r.json())
+      .then(setCounties)
+      .catch(() => {});
+    fetch(`${apiBaseUrl}/crops`)
+      .then(r => r.json())
+      .then(setCrops)
+      .catch(() => {});
   }, [apiBaseUrl]);
 
-  // Poll county status while loading
-  const pollCounty = (countyId) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const r    = await fetch(`${apiBaseUrl}/status/${countyId}`);
-        const data = await r.json();
-        setCounties(prev => prev.map(c =>
-          c.county === countyId ? { ...c, status: data.status, pct: data.pct } : c
-        ));
-        if (data.status === 'ready') {
-          clearInterval(pollRef.current);
-          setCountyLoading(null);
-          const cfgR = await fetch(`${apiBaseUrl}/county?county=${countyId}`);
-          const cfg  = await cfgR.json();
-          onCountyChange(countyId, cfg);
-        } else if (data.status === 'error') {
-          clearInterval(pollRef.current);
-          setCountyLoading(null);
-        }
-      } catch {}
-    }, 2500);
-  };
-
-  // County selected
+  // County selected — ONLY loads config/weights/boundary, no pipeline
   const handleCountySelect = async (countyId) => {
     if (countyId === currentCounty) return;
-    const entry = counties.find(c => c.county === countyId);
-    if (!entry) return;
-
-    if (entry.loaded || entry.status === 'ready') {
-      const r = await fetch(`${apiBaseUrl}/county?county=${countyId}`).then(r => r.json());
-      onCountyChange(countyId, r);
-      return;
-    }
-
-    // Trigger load
-    setCountyLoading(countyId);
-    setCounties(prev => prev.map(c =>
-      c.county === countyId ? { ...c, status: 'fetching', pct: 1 } : c
-    ));
     try {
-      await fetch(`${apiBaseUrl}/admin/load-county?county=${countyId}`, { method: 'POST' });
-      pollCounty(countyId);
-    } catch {
-      setCountyLoading(null);
+      // Load lightweight county+crop config (instant — just reads JSON)
+      const countyParam = `county=${countyId}&crop=${currentCrop || 'cotton'}`;
+      const [countyRes, criteriaRes] = await Promise.all([
+        fetch(`${apiBaseUrl}/county?${countyParam}`).then(r => r.json()),
+        fetch(`${apiBaseUrl}/criteria?${countyParam}`).then(r => r.json()),
+      ]);
+      // Merge criteria into countyRes so App.js gets everything in one object
+      onCountyChange(countyId, { ...countyRes, criteria: criteriaRes });
+    } catch (e) {
+      console.warn('County config fetch failed:', e);
     }
   };
 
@@ -313,12 +250,12 @@ function AnalysisSetup({
     if (cropId === currentCrop) return;
     try {
       const countyParam = currentCounty ? `&county=${currentCounty}` : '';
-      const [criteriaR, countyR] = await Promise.all([
+      const [criteriaRes, countyRes] = await Promise.all([
         fetch(`${apiBaseUrl}/criteria?crop=${cropId}${countyParam}`).then(r => r.json()),
         fetch(`${apiBaseUrl}/county?crop=${cropId}${countyParam}`).then(r => r.json()),
       ]);
       const meta = crops.find(c => c.crop_id === cropId) || { crop_id: cropId };
-      onCropChange(cropId, { ...meta, criteria: criteriaR, ...countyR });
+      onCropChange(cropId, { ...meta, criteria: criteriaRes, ...countyRes });
     } catch {}
   };
 
@@ -327,39 +264,41 @@ function AnalysisSetup({
     onLayerChange(layerId);
   };
 
-  // Build county options
-  const countyOptions = counties.map(c => ({
-    id:       c.county,
-    label:    c.display_name,
-    status:   c.status,
-    pct:      c.pct,
-    disabled: c.county === countyLoading && c.status !== 'ready',
-    hint:     c.status === 'fetching' || c.status === 'pipeline'
-              ? `Fetching data… ${c.pct||0}%`
-              : c.status === 'idle'
-              ? 'Click to fetch data'
-              : c.status === 'error'
-              ? 'Fetch failed — click to retry'
-              : null,
-  }));
+  // Merge server county list with live status from App.js polling
+  const countyOptions = counties.map(c => {
+    const liveStatus = countyStatuses?.[c.county] || {};
+    const status = liveStatus.status || c.status || 'idle';
+    const pct    = liveStatus.pct    || c.pct    || 0;
+    return {
+      id:     c.county,
+      label:  c.display_name,
+      status,
+      pct,
+      // Never disable — user can always switch county
+      hint:
+        status === 'fetching' || status === 'pipeline'
+          ? `Fetching data… ${pct}%`
+          : status === 'error'
+          ? 'Fetch failed — will retry on Run Analysis'
+          : null,
+    };
+  });
 
-  // Build crop options
   const cropOptions = crops.map(c => ({
     id:    c.crop_id,
     label: c.display_name,
   }));
 
-  // Build layer options — suitability only available after analysis
   const layerOptions = LAYER_OPTIONS.map(l => ({
     ...l,
     disabled: l.id === 'suitability' && !hasAnalysis,
     hint:     l.id === 'suitability' && !hasAnalysis ? 'Run analysis first' : null,
   }));
 
-  // Loading progress for county being fetched
-  const loadingEntry = countyLoading
-    ? counties.find(c => c.county === countyLoading)
-    : null;
+  // Show progress bar only when the currently-selected county is actively loading
+  const currentStatus = countyStatuses?.[currentCounty] || {};
+  const isCurrentLoading =
+    currentStatus.status === 'fetching' || currentStatus.status === 'pipeline';
 
   return (
     <div className="panel-section" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -370,7 +309,7 @@ function AnalysisSetup({
         value={currentCounty}
         options={countyOptions}
         onSelect={handleCountySelect}
-        disabled={!!countyLoading}
+        disabled={false}
       />
 
       <InlineDropdown
@@ -378,7 +317,7 @@ function AnalysisSetup({
         value={currentCrop}
         options={cropOptions}
         onSelect={handleCropSelect}
-        disabled={!!countyLoading}
+        disabled={false}
       />
 
       <InlineDropdown
@@ -389,8 +328,8 @@ function AnalysisSetup({
         badge={newResultReady && activeLayer !== 'suitability'}
       />
 
-      {/* County fetch progress bar */}
-      {loadingEntry && (loadingEntry.status === 'fetching' || loadingEntry.status === 'pipeline') && (
+      {/* Progress bar — only for active county data fetch */}
+      {isCurrentLoading && (
         <div style={{ marginTop: '2px' }}>
           <div style={{
             display:        'flex',
@@ -400,11 +339,11 @@ function AnalysisSetup({
             marginBottom:   '3px',
           }}>
             <span style={{ fontStyle: 'italic' }}>
-              {loadingEntry.status === 'fetching'
-                ? 'Fetching from Planetary Computer…'
+              {currentStatus.status === 'fetching'
+                ? 'Downloading layers…'
                 : 'Running pipeline…'}
             </span>
-            <span style={{ fontWeight: 700 }}>{loadingEntry.pct || 0}%</span>
+            <span style={{ fontWeight: 700 }}>{currentStatus.pct || 0}%</span>
           </div>
           <div style={{
             height:       '3px',
@@ -414,11 +353,14 @@ function AnalysisSetup({
           }}>
             <div style={{
               height:       '100%',
-              width:        `${loadingEntry.pct || 0}%`,
+              width:        `${currentStatus.pct || 0}%`,
               background:   '#3d7a22',
               borderRadius: '2px',
               transition:   'width 0.5s ease',
             }} />
+          </div>
+          <div style={{ fontSize: '0.6rem', color: '#9aaa88', marginTop: '3px', fontStyle: 'italic' }}>
+            {currentStatus.message || ''}
           </div>
         </div>
       )}

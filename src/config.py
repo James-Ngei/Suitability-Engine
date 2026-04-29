@@ -43,7 +43,9 @@ def get_active_county() -> str:
         v = f.read_text().strip().lower()
         if v:
             return v
-    return "kitui"
+    # Default to first county alphabetically (baringo)
+    counties = list_counties()
+    return counties[0] if counties else "baringo"
 
 
 def get_active_crop() -> str:

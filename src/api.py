@@ -77,82 +77,109 @@ def _r2_bucket() -> str:
 
 
 def _r2_has_county(county: str, country: str = "kenya") -> bool:
-    """Check if R2 has normalized layers for this county (fast list call)."""
+    """Check if R2 has normalized layers for this county."""
     client = _r2_client()
     if not client:
+        logger.warning(f"[{county}] R2 client is None — check R2_ACCOUNT_ID/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY env vars")
         return False
     try:
         prefix = f"{country}/{county}/normalized/"
         resp   = client.list_objects_v2(Bucket=_r2_bucket(), Prefix=prefix, MaxKeys=1)
-        return resp.get("KeyCount", 0) > 0
-    except Exception:
+        count  = resp.get("KeyCount", 0)
+        logger.info(f"[{county}] R2 list {prefix} → KeyCount={count}")
+        return count > 0
+    except Exception as e:
+        logger.error(f"[{county}] R2 list_objects_v2 failed: {type(e).__name__}: {e}")
         return False
 
 
 def sync_county_from_r2(county: str) -> bool:
     """
     Download normalized layers + boundary + constraint mask from R2.
-    Returns True if all normalized layers were downloaded successfully.
-    Much faster than running the pipeline (~30s vs 12-17min).
+    Returns True if all expected normalized layers were downloaded.
+    Logs every file operation so failures are visible in Render logs.
     """
     client = _r2_client()
     if not client:
-        logger.info(f"[{county}] R2 not configured — will use PC/NASA fetch")
+        logger.error(f"[{county}] sync_county_from_r2: R2 client unavailable")
         return False
-
+ 
     try:
-        config  = load_config(county)
+        config = load_config(county)
     except Exception as e:
-        logger.warning(f"[{county}] Config load failed: {e}")
+        logger.error(f"[{county}] sync_county_from_r2: config load failed: {e}")
         return False
-
+ 
     paths   = config["_paths"]
     country = config.get("country", "kenya").lower()
     bucket  = _r2_bucket()
-
-    # What to sync: (r2_prefix, local_dir, required_for_success)
+ 
+    logger.info(f"[{county}] R2 sync start — bucket={bucket} country={country}")
+ 
     sync_targets = [
         (f"{country}/{county}/normalized/",   paths["normalized_dir"],         True),
         (f"{country}/{county}/boundaries/",   paths["boundary"].parent,        False),
         (f"{country}/{county}/preprocessed/", paths["constraint_mask"].parent, False),
     ]
-
+ 
     normalized_count = 0
     expected         = len(config["layers"])
-
+ 
     for prefix, local_dir, required in sync_targets:
         local_dir = Path(local_dir)
         local_dir.mkdir(parents=True, exist_ok=True)
+        logger.info(f"[{county}] Syncing R2:{prefix} → {local_dir}")
+ 
         try:
-            paginator = client.get_paginator("list_objects_v2")
+            paginator  = client.get_paginator("list_objects_v2")
+            file_count = 0
             for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
                 for obj in page.get("Contents", []):
-                    filename   = obj["Key"].split("/")[-1]
+                    filename = obj["Key"].split("/")[-1]
                     if not filename:
                         continue
+                    file_count += 1
                     local_path = local_dir / filename
-                    # Skip if up to date
+                    is_normalized = "normalized" in prefix
+ 
+                    # Skip if file is up to date
                     if local_path.exists():
                         local_mtime = local_path.stat().st_mtime
                         r2_mtime    = obj["LastModified"].timestamp()
                         if local_mtime >= r2_mtime:
-                            if "normalized" in prefix:
+                            logger.debug(f"[{county}]   skip (up to date): {filename}")
+                            if is_normalized:
                                 normalized_count += 1
                             continue
-                    logger.info(f"[{county}] ↓ {filename}")
-                    client.download_file(bucket, obj["Key"], str(local_path))
-                    if "normalized" in prefix:
-                        normalized_count += 1
+ 
+                    logger.info(f"[{county}]   ↓ {filename} ({obj['Size'] // 1024} KB)")
+                    try:
+                        client.download_file(bucket, obj["Key"], str(local_path))
+                        if is_normalized:
+                            normalized_count += 1
+                    except Exception as e:
+                        logger.error(f"[{county}]   ✗ download failed: {filename}: {e}")
+                        if required:
+                            return False
+ 
+            if file_count == 0:
+                logger.warning(f"[{county}] No files found at R2:{prefix}")
+                if required:
+                    logger.error(f"[{county}] Required prefix empty — sync failed")
+                    return False
+ 
         except Exception as e:
-            logger.warning(f"[{county}] R2 sync failed for {prefix}: {e}")
+            logger.error(f"[{county}] R2 paginator failed for {prefix}: {type(e).__name__}: {e}")
             if required:
                 return False
-
+ 
     success = normalized_count >= expected
-    if success:
-        logger.info(f"[{county}] R2 sync complete: {normalized_count}/{expected} normalized layers")
-    else:
-        logger.warning(f"[{county}] R2 sync incomplete: {normalized_count}/{expected} — will fall back to PC fetch")
+    logger.info(f"[{county}] R2 sync done: {normalized_count}/{expected} normalized layers")
+    if not success:
+        logger.warning(
+            f"[{county}] INCOMPLETE: only {normalized_count}/{expected} layers downloaded. "
+            f"Run: python src/upload_to_r2.py --county {county} to re-upload."
+        )
     return success
 
 
@@ -357,51 +384,104 @@ async def _fetch_and_prepare_county(county: str):
 
 @app.on_event("startup")
 async def startup_event():
+    """
+    Returns immediately so Render health checks pass from the first second.
+    All heavy work (R2 sync, layer loading) runs as background tasks.
+    """
     logger.info("=" * 55)
-    logger.info("  Crop Suitability Engine  v3.0")
+    logger.info("  Crop Suitability Engine  v3.0  — startup")
     r2_configured = bool(os.environ.get("R2_ACCOUNT_ID"))
-    logger.info(f"  Storage: {'Cloudflare R2' if r2_configured else 'PC/NASA fetch (no R2 configured)'}")
+    logger.info(f"  R2 configured : {r2_configured}")
+    logger.info(f"  ACTIVE_COUNTY : {get_active_county()}")
+    logger.info(f"  DATA_DIR      : {os.environ.get('SUITABILITY_DATA_DIR', '~/suitability-engine')}")
     logger.info("=" * 55)
-
-    active = get_active_county()
-
-    # Phase 1: load whatever is already cached locally (instant)
+ 
+    # Phase 1 (synchronous, instant): load any counties already on disk.
+    # On Render cold start this finds nothing (/tmp empty). On local it loads everything.
+    loaded_from_disk = []
     for county in list_counties():
         try:
             cfg = load_config(county)
             if any(p.exists() for p in cfg["_paths"]["normalized_layers"].values()):
-                logger.info(f"[{county}] Local cache found — loading...")
-                load_county_layers(county)
+                ok = load_county_layers(county)
+                if ok:
+                    loaded_from_disk.append(county)
             else:
                 _set_status(county, "idle", "Not yet fetched")
         except Exception as e:
-            logger.warning(f"[{county}] Skipping: {e}")
-
-    # Phase 2: if active county not loaded, try R2 then fall back to PC fetch
-    if active not in COUNTY_CACHE:
-        if r2_configured and _r2_has_county(active):
-            logger.info(f"[{active}] Pulling from R2...")
-            _set_status(active, "fetching", "Downloading from R2 storage", pct=10)
-            loop = asyncio.get_event_loop()
-            ok   = await loop.run_in_executor(None, lambda: sync_county_from_r2(active))
-            if ok:
-                load_county_layers(active)
-                logger.info(f"[{active}] Loaded from R2 ✅")
-            else:
-                logger.warning(f"[{active}] R2 pull incomplete — falling back to PC fetch")
-                asyncio.create_task(_fetch_and_prepare_county(active))
-        else:
-            logger.info(f"[{active}] Not in R2 or R2 not configured — starting PC fetch...")
-            asyncio.create_task(_fetch_and_prepare_county(active))
+            logger.warning(f"[{county}] startup scan failed: {e}")
+ 
+    if loaded_from_disk:
+        logger.info(f"Loaded from local disk: {loaded_from_disk}")
     else:
-        logger.info(f"[{active}] Already loaded ✅")
-
-    # Build RAG store (best-effort)
+        logger.info("No local cache found (normal on Render cold start)")
+ 
+    # Phase 2 (background): sync active county from R2 or fetch from PC.
+    # Runs AFTER this function returns so /ping responds immediately.
+    active = get_active_county()
+    if active not in COUNTY_CACHE:
+        asyncio.create_task(_startup_load_county(active))
+    else:
+        logger.info(f"[{active}] Already loaded from disk — skipping background sync")
+ 
+    # Build RAG store (best-effort, non-blocking)
     try:
         from report_writer import build_rag_store
-        build_rag_store()
+        asyncio.create_task(asyncio.get_event_loop().run_in_executor(None, build_rag_store))
     except Exception as e:
-        logger.warning(f"RAG store: {e}")
+        logger.warning(f"RAG store skipped: {e}")
+ 
+    logger.info("Startup complete — API ready to serve requests")
+ 
+ 
+async def _startup_load_county(county: str):
+    """
+    Background task: try R2 first, fall back to PC fetch.
+    Logs every step clearly so failures are visible in Render logs.
+    """
+    loop = asyncio.get_event_loop()
+    r2_configured = bool(os.environ.get("R2_ACCOUNT_ID"))
+ 
+    logger.info(f"[{county}] Background load starting (R2 configured: {r2_configured})")
+ 
+    if r2_configured:
+        # Step 1: check R2 has data for this county
+        _set_status(county, "fetching", "Checking R2 storage…", pct=2)
+        try:
+            has_r2 = await loop.run_in_executor(None, lambda: _r2_has_county(county))
+            logger.info(f"[{county}] R2 has data: {has_r2}")
+        except Exception as e:
+            logger.error(f"[{county}] R2 connectivity check failed: {e}")
+            has_r2 = False
+ 
+        if has_r2:
+            # Step 2: download from R2
+            _set_status(county, "fetching", "Downloading from R2…", pct=10)
+            try:
+                ok = await loop.run_in_executor(None, lambda: sync_county_from_r2(county))
+                logger.info(f"[{county}] R2 sync result: {'OK' if ok else 'INCOMPLETE'}")
+            except Exception as e:
+                logger.error(f"[{county}] R2 sync exception: {e}")
+                ok = False
+ 
+            if ok:
+                _set_status(county, "pipeline", "Loading layers into memory…", pct=92)
+                loaded = await loop.run_in_executor(None, lambda: load_county_layers(county))
+                if loaded:
+                    logger.info(f"[{county}] ✅ Loaded from R2 successfully")
+                    return
+                else:
+                    logger.error(f"[{county}] R2 files downloaded but load_county_layers failed — check file integrity")
+            else:
+                logger.warning(f"[{county}] R2 sync incomplete — falling back to PC fetch")
+        else:
+            logger.warning(f"[{county}] Not found in R2 — falling back to PC fetch")
+            logger.warning(f"[{county}] Run locally: python src/upload_to_r2.py --county {county}")
+    else:
+        logger.info(f"[{county}] R2 not configured — using PC fetch")
+ 
+    # Fallback: full PC fetch + pipeline
+    await _fetch_and_prepare_county(county)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -585,6 +665,86 @@ async def get_boundary_geojson(county: Optional[str] = Query(None)):
         gdf = gdf.to_crs("EPSG:4326")
     return json.loads(gdf.to_json())
 
+
+@app.get("/r2-debug")
+async def r2_debug(county: Optional[str] = Query(None)):
+    """
+    Diagnose R2 connectivity and bucket contents.
+    """
+    result = {
+        "env_vars": {
+            "R2_ACCOUNT_ID":        "SET" if os.environ.get("R2_ACCOUNT_ID") else "MISSING",
+            "R2_ACCESS_KEY_ID":     "SET" if os.environ.get("R2_ACCESS_KEY_ID") else "MISSING",
+            "R2_SECRET_ACCESS_KEY": "SET" if os.environ.get("R2_SECRET_ACCESS_KEY") else "MISSING",
+            "R2_BUCKET":            os.environ.get("R2_BUCKET", "(not set, default: suitability-engine)"),
+            "SUITABILITY_DATA_DIR": os.environ.get("SUITABILITY_DATA_DIR", "(not set)"),
+            "ACTIVE_COUNTY":        os.environ.get("ACTIVE_COUNTY", "(not set)"),
+        },
+        "r2_client": "unavailable",
+        "bucket_accessible": False,
+        "counties_found": [],
+        "county_detail": None,
+    }
+ 
+    client = _r2_client()
+    if not client:
+        result["r2_client"] = "FAILED — missing credentials (see env_vars above)"
+        return result
+ 
+    result["r2_client"] = "ok"
+    bucket = _r2_bucket()
+ 
+    # Test basic bucket access
+    try:
+        resp = client.list_objects_v2(Bucket=bucket, Prefix="", MaxKeys=50, Delimiter="/")
+        result["bucket_accessible"] = True
+        # Top-level "folders" (countries)
+        prefixes = [p.get("Prefix", "") for p in resp.get("CommonPrefixes", [])]
+        result["top_level_prefixes"] = prefixes
+    except Exception as e:
+        result["bucket_accessible"] = False
+        result["bucket_error"] = f"{type(e).__name__}: {e}"
+        return result
+ 
+    # List counties under kenya/
+    try:
+        resp = client.list_objects_v2(Bucket=bucket, Prefix="kenya/", MaxKeys=200, Delimiter="/")
+        county_prefixes = [p.get("Prefix","").rstrip("/").split("/")[-1]
+                          for p in resp.get("CommonPrefixes", [])]
+        result["counties_found"] = county_prefixes
+    except Exception as e:
+        result["counties_list_error"] = str(e)
+ 
+    # Detail for specific county
+    c = (county or get_active_county()).strip().lower()
+    try:
+        cfg = load_config(c)
+        country_str = cfg.get("country", "kenya").lower()
+        detail = {"county": c, "expected_layers": list(cfg["layers"].keys()), "r2_files": {}}
+ 
+        for subfolder in ["normalized", "boundaries", "preprocessed"]:
+            prefix = f"{country_str}/{c}/{subfolder}/"
+            try:
+                resp2 = client.list_objects_v2(Bucket=bucket, Prefix=prefix, MaxKeys=20)
+                files = [obj["Key"].split("/")[-1] for obj in resp2.get("Contents", [])]
+                detail["r2_files"][subfolder] = files
+            except Exception as e:
+                detail["r2_files"][subfolder] = f"ERROR: {e}"
+ 
+        # Check local cache
+        paths = cfg["_paths"]
+        detail["local_cache"] = {
+            name: path.exists()
+            for name, path in paths["normalized_layers"].items()
+        }
+        detail["in_memory"] = c in COUNTY_CACHE
+        detail["status"] = COUNTY_STATUS.get(c, {})
+ 
+        result["county_detail"] = detail
+    except Exception as e:
+        result["county_detail_error"] = str(e)
+ 
+    return result
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ENDPOINTS — analysis

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './App.css';
 import MapView from './components/MapView';
 import WeightControls from './components/WeightControls';
@@ -22,6 +22,11 @@ function App() {
   const [applyConstraints, setApplyConstraints]= useState(true);
   const [apiError,         setApiError]        = useState(null);
 
+  // Per-county pipeline/fetch status — polled while any county is loading
+  // { countyId: { status, pct, message } }
+  const [countyStatuses,   setCountyStatuses]  = useState({});
+  const pollRef = useRef(null);
+
   const [reportOverlay,    setReportOverlay]   = useState(false);
   const [pdfBlobUrl,       setPdfBlobUrl]      = useState(null);
   const [pdfFilename,      setPdfFilename]     = useState('');
@@ -32,6 +37,7 @@ function App() {
   const isMobile       = /iPhone|iPad|Android/i.test(navigator.userAgent);
   const reportPanelRef = useRef(null);
 
+  // ── Initial load ────────────────────────────────────────────────────────────
   const loadInitial = async () => {
     try {
       const [countyRes, criteriaRes] = await Promise.all([
@@ -58,18 +64,32 @@ function App() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  // County changed from AnalysisSetup
+  // ── Poll status for counties that are actively loading ─────────────────────
+  const pollCountyStatus = useCallback((countyId) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const r    = await fetch(`${API_BASE_URL}/status/${countyId}`);
+        const data = await r.json();
+        setCountyStatuses(prev => ({
+          ...prev,
+          [countyId]: { status: data.status, pct: data.pct || 0, message: data.message || '' },
+        }));
+        if (data.status === 'ready' || data.status === 'error') {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
+        }
+      } catch {}
+    }, 2500);
+  }, []);
+
+  // ── County changed — config only, NO pipeline ──────────────────────────────
   const handleCountyChange = (countyId, countyConfig) => {
     setCountyInfo(countyConfig);
     setActiveCounty(countyId);
-    if (countyConfig.weights) setWeights({ ...countyConfig.weights });
-    if (countyConfig.criteria) setCriteria(countyConfig.criteria);
-    else {
-      axios.get(`${API_BASE_URL}/criteria?crop=${activeCrop||'cotton'}&county=${countyId}`)
-        .then(r => setCriteria(r.data)).catch(() => {});
-    }
-    // Always clear the previous analysis and reset to suitability layer.
-    // The suitability layer safely shows "run analysis first" when there's no result.
+    if (countyConfig.weights)   setWeights({ ...countyConfig.weights });
+    if (countyConfig.criteria)  setCriteria(countyConfig.criteria);
+    // Clear previous results — new county, fresh start
     setAnalysisResult(null);
     setNewResultReady(false);
     setPdfBlobUrl(null);
@@ -77,27 +97,26 @@ function App() {
     setActiveLayer('suitability');
   };
 
-  // Crop changed from AnalysisSetup
+  // ── Crop changed ───────────────────────────────────────────────────────────
   const handleCropChange = (cropId, cropMeta) => {
     setActiveCrop(cropId);
     if (cropMeta.criteria) setCriteria(cropMeta.criteria);
-    if (cropMeta.weights) setWeights({ ...cropMeta.weights });
+    if (cropMeta.weights)  setWeights({ ...cropMeta.weights });
     setCountyInfo(prev => ({ ...prev, crop: cropMeta.display_name || cropId, crop_id: cropId }));
     setAnalysisResult(null);
     setNewResultReady(false);
     setPdfBlobUrl(null);
     setReportOverlay(false);
-    // Reset to suitability on crop change too — no stale overlay
     setActiveLayer('suitability');
   };
 
-  // Layer changed from AnalysisSetup
+  // ── Layer changed ──────────────────────────────────────────────────────────
   const handleLayerChange = (layerId) => {
     setActiveLayer(layerId);
-    // Clear the NEW badge only when the user explicitly switches to suitability
     if (layerId === 'suitability') setNewResultReady(false);
   };
 
+  // ── Weight controls ────────────────────────────────────────────────────────
   const handleWeightChange = (criterion, value) => {
     const nw     = { ...weights, [criterion]: value };
     const others = Object.keys(weights).filter(k => k !== criterion);
@@ -113,42 +132,113 @@ function App() {
     if (countyInfo?.weights) setWeights({ ...countyInfo.weights });
   };
 
+  // ── Run Analysis — THIS is where data fetching is triggered if needed ──────
   const runAnalysis = async () => {
     setLoading(true);
     setNewResultReady(false);
     setPdfBlobUrl(null);
     setReportOverlay(false);
     setReportError(null);
+
     try {
       const params = new URLSearchParams();
       if (activeCounty) params.set('county', activeCounty);
       if (activeCrop)   params.set('crop',   activeCrop);
+
+      // First attempt the analysis
+      try {
+        const r = await axios.post(`${API_BASE_URL}/analyze?${params}`, {
+          weights: weights, apply_constraints: applyConstraints,
+        });
+        setAnalysisResult(r.data);
+        if (activeLayer === 'suitability') {
+          setNewResultReady(false);
+        } else {
+          setNewResultReady(true);
+        }
+        return; // success — done
+      } catch (firstErr) {
+        // If 503 (county not loaded) or 404, trigger load then retry
+        const status = firstErr.response?.status;
+        if (status !== 503 && status !== 404) {
+          // Other error — surface it
+          const d = firstErr.response?.data?.detail;
+          alert('Error: ' + (typeof d === 'string' ? d : JSON.stringify(d) || firstErr.message));
+          return;
+        }
+        // County not loaded — trigger fetch now
+      }
+
+      // Trigger load for this county (fetch + pipeline)
+      setCountyStatuses(prev => ({
+        ...prev,
+        [activeCounty]: { status: 'fetching', pct: 1, message: 'Starting data fetch…' },
+      }));
+
+      const loadRes = await fetch(
+        `${API_BASE_URL}/admin/load-county?county=${activeCounty}`,
+        { method: 'POST' }
+      );
+      const loadData = await loadRes.json();
+
+      if (loadData.status === 'ready') {
+        // Was already ready (e.g. loaded from R2 synchronously)
+        setCountyStatuses(prev => ({
+          ...prev,
+          [activeCounty]: { status: 'ready', pct: 100, message: 'Loaded' },
+        }));
+      } else {
+        // Background task started — poll for progress
+        pollCountyStatus(activeCounty);
+
+        // Wait for ready (poll every 3s, timeout 20min)
+        const deadline = Date.now() + 20 * 60 * 1000;
+        await new Promise((resolve, reject) => {
+          const check = setInterval(async () => {
+            try {
+              const s = await fetch(`${API_BASE_URL}/status/${activeCounty}`).then(r => r.json());
+              setCountyStatuses(prev => ({
+                ...prev,
+                [activeCounty]: { status: s.status, pct: s.pct || 0, message: s.message || '' },
+              }));
+              if (s.status === 'ready') {
+                clearInterval(check);
+                resolve();
+              } else if (s.status === 'error') {
+                clearInterval(check);
+                reject(new Error(s.message || 'Data fetch failed'));
+              } else if (Date.now() > deadline) {
+                clearInterval(check);
+                reject(new Error('Timeout waiting for data'));
+              }
+            } catch (e) {
+              clearInterval(check);
+              reject(e);
+            }
+          }, 3000);
+        });
+      }
+
+      // Data is now ready — run analysis
       const r = await axios.post(`${API_BASE_URL}/analyze?${params}`, {
         weights: weights, apply_constraints: applyConstraints,
       });
       setAnalysisResult(r.data);
-
-      // After analysis completes:
-      // - If already on suitability layer → new result loads automatically, no badge needed
-      // - If on a factor layer → keep viewing it but show NEW badge on suitability
       if (activeLayer === 'suitability') {
         setNewResultReady(false);
       } else {
         setNewResultReady(true);
       }
+
     } catch (err) {
-      const d = err.response?.data?.detail;
-      if (err.response?.status === 503) {
-        const msg = typeof d === 'object' ? d.message : d;
-        alert(`County data is still loading.\n${msg}\nPlease wait and try again.`);
-      } else {
-        alert('Error: ' + (typeof d === 'string' ? d : JSON.stringify(d) || err.message));
-      }
+      const msg = err.message || 'Analysis failed';
+      alert(msg);
     } finally {
       setLoading(false);
     }
   };
 
+  // ── Report helpers ─────────────────────────────────────────────────────────
   const handleGenerateReport = async () => {
     if (!analysisResult?.analysis_id) return;
     setReportGenerating(true);
@@ -181,6 +271,7 @@ function App() {
     const a = document.createElement('a'); a.href = pdfBlobUrl; a.download = pdfFilename; a.click();
   };
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   if (apiError) return (
     <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
       height:'100vh', flexDirection:'column', gap:'1rem', background:'#1a1f16', color:'#c07050' }}>
@@ -204,6 +295,20 @@ function App() {
   const hasAnalysis  = !!analysisResult?.analysis_id;
   const canRun       = !loading && Math.abs(totalWeight - 1.0) <= 0.01;
 
+  // Build loading label for Run Analysis button
+  const currentStatus = countyStatuses[activeCounty];
+  const isFetching    = loading && (
+    currentStatus?.status === 'fetching' || currentStatus?.status === 'pipeline'
+  );
+  let runLabel = '▶ Run Analysis';
+  if (loading && !isFetching)        runLabel = '⏳ Analyzing…';
+  if (isFetching) {
+    const pct = currentStatus?.pct || 0;
+    runLabel = pct < 50
+      ? `⬇ Fetching data… ${pct}%`
+      : `⚙ Processing… ${pct}%`;
+  }
+
   return (
     <div className="App">
       <header className="header">
@@ -217,7 +322,6 @@ function App() {
       <div className="container">
         <div className="left-panel">
 
-          {/* Single consolidated setup panel */}
           <AnalysisSetup
             apiBaseUrl={API_BASE_URL}
             currentCounty={activeCounty}
@@ -225,6 +329,7 @@ function App() {
             activeLayer={activeLayer}
             hasAnalysis={hasAnalysis}
             newResultReady={newResultReady}
+            countyStatuses={countyStatuses}
             onCountyChange={handleCountyChange}
             onCropChange={handleCropChange}
             onLayerChange={handleLayerChange}
@@ -238,8 +343,31 @@ function App() {
               Apply protected area constraints
             </label>
             <button className="analyze-button" onClick={runAnalysis} disabled={!canRun}>
-              {loading ? '⏳ Analyzing…' : '▶ Run Analysis'}
+              {runLabel}
             </button>
+            {/* Show inline progress when fetching */}
+            {isFetching && currentStatus && (
+              <div style={{ marginTop: '6px' }}>
+                <div style={{
+                  height: '3px', background: '#dde5d4', borderRadius: '2px', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%',
+                    width:  `${currentStatus.pct || 0}%`,
+                    background: '#3d7a22',
+                    borderRadius: '2px',
+                    transition: 'width 0.5s ease',
+                  }} />
+                </div>
+                <div style={{
+                  fontSize: '0.62rem', color: '#7a8f68', marginTop: '3px',
+                  fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {currentStatus.message || ''}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Weights */}
