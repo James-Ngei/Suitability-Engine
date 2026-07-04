@@ -1,0 +1,3 @@
+# Test / CI dependencies (installed on top of requirements.txt)
+pytest>=8.0
+httpx>=0.27          # required by starlette.testclient.TestClient
