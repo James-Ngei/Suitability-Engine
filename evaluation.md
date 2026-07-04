@@ -1,6 +1,6 @@
 # Evaluation — Crop Suitability Engine
 
-*Version 2.1 · Last updated April 2026*
+*Version 3.0 · Last updated April 2026*
 
 ---
 
@@ -15,7 +15,8 @@
 - [7. Sensitivity Analysis Results](#7-sensitivity-analysis-results)
 - [8. Deployment Readiness](#8-deployment-readiness)
 - [9. Accuracy Assessment Methodology](#9-accuracy-assessment-methodology)
-- [10. Known Issues & Mitigations](#10-known-issues--mitigations)
+- [10. Automated Test Suite](#10-automated-test-suite)
+- [11. Known Issues & Mitigations](#11-known-issues--mitigations)
 
 ---
 
@@ -33,34 +34,39 @@ This document evaluates the Crop Suitability Engine across five dimensions:
 
 Where quantitative metrics are available they are reported. Where the evaluation is qualitative, the reasoning and evidence are stated explicitly.
 
+Testing operates at two levels. An **automated pytest suite** ([§10](#10-automated-test-suite)) locks down the deterministic core — the fuzzy functions, weighted overlay, classification, statistics, config invariants, and API request handling — and runs on every push via GitHub Actions. The manual and analytical checks documented in the sections below (spatial alignment, report layout, LLM narrative quality, usability) complement the automated suite where behaviour is visual, agronomic, or otherwise not amenable to a simple assertion.
+
+> **Configuration note:** as of v3.0, normalization thresholds and criterion weights are defined **per crop** in `config/crops/<crop>.json` and applied uniformly across all 47 counties; county configs (`config/counties/<county>.json`) carry geography only. Earlier per-county agronomy has been consolidated into per-crop agronomy — see [§2.2](#22-weight-defaults).
+
 ---
 
 ## 2. Analytical Validity
 
 ### 2.1 Normalization thresholds
 
-Thresholds for each fuzzy function were derived from peer-reviewed agronomic literature and cross-checked against Kenya's National Cotton Development Authority (NCDA) guidelines. The table below summarizes the Kitui config and its justification.
+Thresholds for each fuzzy function were derived from peer-reviewed agronomic literature and cross-checked against Kenya's National Cotton Development Authority (NCDA) guidelines. They live in `config/crops/cotton.json` and apply to cotton across every county. The table below summarizes the cotton config and its justification.
 
 | Criterion | Function | Parameters | Agronomic basis |
 |---|---|---|---|
-| Elevation | Trapezoidal | a=200, b=400, c=1000, d=1500 | Cotton performs well at 400–1000 m in ASAL regions; above 1500 m cold stress limits yield |
-| Rainfall | Trapezoidal | a=400, b=600, c=900, d=1200 | 600–900 mm is the accepted optimal range for rainfed cotton in semi-arid Kenya |
-| Temperature | Gaussian | optimal=27, spread=5 | Mean annual temperature of 25–30°C suits lowland cotton; Gaussian reflects symmetric sensitivity around optimum |
+| Elevation | Trapezoidal | a=200, b=500, c=1200, d=1800 | Cotton performs well at ~500–1200 m; the wide plateau accommodates both ASAL lowlands and mid-altitude zones across counties |
+| Rainfall | Trapezoidal | a=400, b=600, c=1000, d=1600 | 600–1000 mm brackets the accepted optimal range for rainfed cotton in Kenya |
+| Temperature | Gaussian | optimal=27, spread=5 | Mean annual temperature of ~25–30°C suits cotton; Gaussian reflects symmetric sensitivity around the optimum |
 | Soil clay | Trapezoidal | a=100, b=200, c=400, d=550 | Moderate clay (200–400 g/kg) retains moisture without waterlogging; SoilGrids g/kg units confirmed |
 | Slope | Linear descending | min=0, max=15 | FAO slope classes: <2° excellent, 2–8° good, >15° mechanization impossible and erosion risk unacceptable |
 
-**Bungoma** uses different thresholds reflecting the county's highland agroecological zone (1200–1700 m elevation optimal, 1400–1800 mm rainfall optimal, optimal temperature 25°C).
+Because the thresholds are defined per crop rather than per county, a single crop config is validated once and reused everywhere. Other crops (`maize.json`, `coffee.json`, etc.) carry their own thresholds — e.g. coffee's higher-altitude, higher-rainfall optima. Every crop config's normalization types are checked automatically ([§10](#10-automated-test-suite)).
 
 ### 2.2 Weight defaults
 
-Default weights reflect the relative importance of each criterion for cotton in the respective agroecological zone, informed by expert consultation. They are intentionally set as defaults, not fixed values — the entire purpose of the interactive dashboard is weight exploration by the analyst.
+Default weights reflect the relative importance of each criterion for the crop, informed by expert consultation. They are intentionally set as defaults, not fixed values — the entire purpose of the interactive dashboard is weight exploration by the analyst.
 
-| County | Rainfall | Elevation | Temperature | Soil | Slope |
+| Crop | Rainfall | Elevation | Temperature | Soil | Slope |
 |---|---|---|---|---|---|
-| Kitui | 0.30 | 0.15 | 0.20 | 0.20 | 0.15 |
-| Bungoma | 0.25 | 0.20 | 0.20 | 0.20 | 0.15 |
+| Cotton | 0.30 | 0.15 | 0.20 | 0.20 | 0.15 |
 
-Kitui's higher rainfall weight (0.30 vs 0.25) reflects the greater water stress risk in the semi-arid ASAL zone.
+Cotton's rainfall weight (0.30, the highest) reflects that water availability is the primary limiting factor for rainfed cotton in Kenya's drier zones. An automated test asserts that every crop's weights sum to 1.0 ([§10](#10-automated-test-suite)).
+
+**Modeling simplification (and future work).** Weights are now defined per crop and applied uniformly across counties. This trades the earlier per-county tuning (e.g. a higher rainfall weight for semi-arid counties) for a much simpler, crop-centric config that scales to all 47 counties. Because the dashboard lets the analyst adjust weights per session, county-specific emphasis can still be applied interactively. A per-county weight/threshold override layer is noted as future work.
 
 ### 2.3 Classification thresholds
 
@@ -162,9 +168,9 @@ Weights more than 1% off return HTTP 400 with a descriptive error. This prevents
 
 | Endpoint | Test | Expected | Verified |
 |---|---|---|---|
-| `GET /health` | Cold start with no layers | `status: degraded`, `layers_loaded: 0` | ✅ |
-| `GET /health` | Normal startup | `status: healthy`, `layers_loaded: 5` | ✅ |
-| `GET /county` | Active county = kitui | Returns kitui metadata with correct map_center | ✅ |
+| `GET /health` | Cold start, no county loaded | `status: degraded`, active county `layers_loaded: 0` | ✅ |
+| `GET /health` | Active county loaded | `status: healthy`, that county's `layers_loaded: 5` | ✅ |
+| `GET /county` | county=kitui | Returns kitui metadata with correct map_center | ✅ |
 | `POST /analyze` | Weights sum to 1.0 | Returns SuitabilityResponse with analysis_id | ✅ |
 | `POST /analyze` | Weights sum to 1.05 | HTTP 400 weight validation error | ✅ |
 | `POST /analyze` | Wrong criterion keys | HTTP 400 with expected/received diff | ✅ |
@@ -175,7 +181,9 @@ Weights more than 1% off return HTTP 400 with a descriptive error. This prevents
 | `POST /report/{id}` | depth=summary | PDF, 2 pages | ✅ |
 | `POST /report/{id}` | depth=full | PDF, 4 pages | ✅ |
 | `POST /report/{id}` | depth=invalid | HTTP 400 | ✅ |
-| `POST /admin/reload` | No S3 configured | Reloads from local files, returns counts | ✅ |
+| `POST /admin/reload` | No R2 configured | Re-fetches / reloads from local files, returns counts | ✅ |
+
+Rows involving metadata endpoints and `/analyze` request validation (weight sum, criterion keys, not-loaded county, malformed body) are now also covered by the automated suite in `tests/test_api.py` ([§10](#10-automated-test-suite)); rows requiring rendered assets or a fully loaded county (map image, GeoTIFF download, PDF depth) remain manual/integration checks.
 
 ### 4.2 CORS
 
@@ -287,48 +295,46 @@ elasticity = (suitability_range / mid_suitability) / weight_range
 
 **Interpretation:** Rainfall and temperature are the most influential criteria in Kitui — changes to their weights produce the largest shifts in mean suitability. This is consistent with the semi-arid ASAL context where water availability and heat stress are the primary limiting factors. Slope has the lowest influence, reflecting that most of Kitui's land area falls within the acceptable slope range for cotton.
 
-**Implication for data quality:** High-influence criteria require higher-quality source data. The CHIRPS rainfall dataset (0.05° resolution) and WorldClim temperature (1 km resolution) should be validated against local station data for Kitui before making resource allocation decisions based on these results.
+**Implication for data quality:** High-influence criteria require higher-quality source data. Rainfall and temperature are fetched from NASA POWER (~0.5°/0.1° climatology grid) and elevation from Copernicus DEM GLO-30 via Planetary Computer; the coarser climate grids in particular should be validated against local station data before making resource-allocation decisions based on these results.
 
 ---
 
 ## 8. Deployment Readiness
 
-The `deploy_check.py` script runs automated checks across seven categories. All checks should pass before deploying.
+The `deploy_check.py` script runs automated checks across eight categories. All checks should pass before deploying (verified passing on the current tree).
 
 ### Check categories and common failures
 
-**Repo structure** — verifies that `src/api.py`, `src/config.py`, `config/kitui.json`, `render.yaml`, and `requirements.txt` all exist.
+**Repo structure** — verifies that `src/api.py`, `src/config.py`, `src/pc_fetcher.py`, `config/counties/`, `config/crops/`, `render.yaml`, and `requirements.txt` all exist.
 
 **render.yaml** — verifies:
-- Start command uses `src.api:app` (not `api:app` which fails on Render)
-- `SUITABILITY_DATA_DIR`, `ACTIVE_COUNTY`, and `AWS_S3_BUCKET` are set
-- AWS credentials are marked `sync: false` (secrets not stored in git)
+- Start command uses `src.api:app` (not `api:app`, which fails on Render)
+- Health check path is `/ping` (returns instantly so startup passes immediately)
+- `SUITABILITY_DATA_DIR`, `ACTIVE_COUNTY`, `ACTIVE_CROP`, and `R2_BUCKET` are set
+- Secret credentials (R2 keys, `GROQ_API_KEY`) are marked `sync: false` (never stored in git)
 
-**requirements.txt** — verifies all required packages are listed: `fastapi`, `uvicorn`, `rasterio`, `numpy`, `boto3`, `geopandas`, `pillow`, `pydantic`.
+**requirements.txt** — verifies all required packages are listed: `fastapi`, `uvicorn`, `rasterio`, `numpy`, `boto3`, `geopandas`, `pillow`, `pydantic`, `planetary-computer`, `pystac-client`.
 
-**County configs** — parses each JSON and verifies required keys and weight sum.
+**County configs** — parses each `config/counties/*.json` and verifies the geography keys (`county`, `display_name`, `layers`, `map_center`, `map_zoom`).
 
-**config.py path logic** — verifies `CONFIG_DIR` is resolved from `__file__` (not `BASE_DIR`) and both `ACTIVE_COUNTY` and `SUITABILITY_DATA_DIR` env vars are supported.
+**Crop configs** — parses each `config/crops/*.json` and verifies the agronomy keys, that weights sum to 1.0, and that every normalization type is valid.
+
+**config.py path logic** — verifies `CONFIG_DIR` is resolved from `__file__` (not the working directory) and that `ACTIVE_COUNTY`, `ACTIVE_CROP`, and `SUITABILITY_DATA_DIR` env vars are supported.
 
 **.gitignore** — warns (not errors) if `data/`, `venv/`, or `*.tif` are not ignored.
 
-**S3 sync coverage** — verifies the four expected S3 prefixes appear in `api.py`.
+**R2 sync / fetch coverage** — verifies `sync_county_from_r2`, the on-demand `fetch_all_layers` fallback, the three R2 prefixes (`normalized/`, `boundaries/`, `preprocessed/`), and the `/admin/reload` + `/admin/load-county` endpoints are present in `api.py`.
 
 ### Post-deploy verification
 
 After deploying to Render, confirm via:
 
 ```bash
-curl https://your-service.onrender.com/health
+curl https://suitability-engine.onrender.com/ping      # → {"status":"ok"} immediately
+curl https://suitability-engine.onrender.com/health    # per-county load state
 ```
 
-A healthy response requires:
-- `"status": "healthy"`
-- `"layers_loaded": 5` (or the number of layers in the active county config)
-- `"boundary_available": true`
-- `"constraint_mask": true`
-
-If `layers_loaded` is 0, check Render logs for S3 credential errors or missing files.
+A cold start reports `status: degraded` until the active county reaches `loaded`; poll `GET /status/{county}` to watch the fetch/pipeline progress. If a county stays in `error`, check the Render logs for R2 credential errors or an unreachable data source.
 
 ---
 
@@ -366,7 +372,47 @@ The current model produces a point estimate with no uncertainty bounds. Future w
 
 ---
 
-## 10. Known Issues & Mitigations
+## 10. Automated Test Suite
+
+The deterministic core of the engine is covered by an automated **pytest** suite in `tests/`, run locally with `pytest` and on every push / pull request by GitHub Actions (`.github/workflows/ci.yml`) against Python 3.11 and 3.12. The current suite is **68 tests, ~4 seconds**, all passing.
+
+### Testing philosophy
+
+Automated tests target the parts of the system with a single correct answer — arithmetic, thresholds, config invariants, and request validation. Three principles keep the suite reliable:
+
+- **Offline and deterministic.** No test hits the network or triggers a data fetch. Raster operations write tiny in-memory GeoTIFFs to a temp directory instead of depending on downloaded county data.
+- **Fast.** The whole suite runs in seconds, so it can gate every push without slowing development.
+- **Assertion-based, not visual.** Anything requiring human judgement (map legibility, narrative quality, PDF layout) stays in the manual sections above; the automated suite asserts only on values.
+
+### Coverage
+
+| Test file | Target | What it verifies (and why) |
+|---|---|---|
+| `test_normalize.py` | `normalize.py` | The three fuzzy functions at their defining points — trapezoidal plateau/shoulders, Gaussian peak & symmetry, linear-descending endpoints — plus 0–100 clamping. These functions convert every raw value into a score, so an error here silently corrupts every map. |
+| `test_suitability.py` | `suitability.py` | Weighted-overlay arithmetic (incl. the hand-checked `80·0.5 + 60·0.5 = 70` case from [§3.4](#34-weighted-overlay-arithmetic)), score clamping, four-class classification boundaries, statistics counts/percentages, and empty-raster safety. |
+| `test_config.py` | `config.py` | County/crop discovery, the county × crop merge, and — parametrized across **all 10 crops** — that weights sum to 1.0, weight and normalization keys agree, and every normalization type is known. Guards the invariants the pipeline assumes. |
+| `test_api.py` | `api.py` | Metadata endpoints (`/ping`, `/health`, `/counties`, `/crops`, `/county`, `/criteria`) and `/analyze` request validation (unloaded county → 404/503, malformed body → 422) via FastAPI `TestClient`. |
+
+### Key techniques
+
+- **Temp-raster fixtures.** `test_suitability.py` writes small labelled GeoTIFFs with `rasterio`, so classification and statistics are checked against hand-computed expected counts without any external data.
+- **Startup-free API tests.** The API client is constructed as `TestClient(app)` **without** the context-manager form, so Starlette does not run the startup lifespan — no R2 sync or Planetary Computer fetch happens during the tests. This is what keeps `test_api.py` offline and fast.
+- **Parametrization over configs.** Config invariants are parametrized across every crop file, so adding a new crop automatically inherits the weight-sum and normalization-type checks.
+
+### Relationship to the manual checks
+
+Several checks that were previously manual are now enforced automatically: the weighted-overlay arithmetic ([§3.4](#34-weighted-overlay-arithmetic)), the weight-sum validation ([§3.5](#35-edge-case-weights-not-summing-to-10)), and the metadata / `/analyze` validation rows in [§4.1](#41-endpoint-response-correctness). The manual checks that remain — spatial alignment ([§3.1](#31-spatial-alignment-verification)), report layout ([§6.1](#61-pdf-layout-correctness)), and LLM narrative quality ([§6.2](#62-llm-narrative-quality)) — are those requiring rendered output or human judgement, and are candidates for future integration tests.
+
+### Running the suite
+
+```bash
+pip install -r requirements-dev.txt
+pytest                    # 68 tests, ~4s
+```
+
+---
+
+## 11. Known Issues & Mitigations
 
 | Issue | Severity | Status | Mitigation |
 |---|---|---|---|
@@ -375,7 +421,7 @@ The current model produces a point estimate with no uncertainty bounds. Future w
 | PDF iframe shows blank box for 1–2 seconds while rendering | Low | Open | Add a loading spinner inside the overlay |
 | Sensitivity analysis imports `product` from `itertools` but doesn't use it | Low | Open | Remove unused import |
 | `frontend/public/index.html` still references Bungoma in meta description | Low | Open | Update to generic description or dynamically set from API |
-| S3 sync failure is logged but does not prevent API startup | Medium | By design | Health endpoint reports degraded status; monitor `layers_loaded` |
+| R2 sync / data fetch failure is logged but does not prevent API startup | Medium | By design | Startup returns immediately; `/health` and `/status/{county}` report per-county `fetching`/`pipeline`/`error` state |
 | LLM narrative may occasionally include markdown formatting | Low | Mitigated | Paragraph splitter handles `\n\n`; bold/italic markers pass through to PDF without ReportLab rendering them (plain text) |
 | Weighted overlay does not account for criterion correlation | Informational | By design | Document in methodology; flag in reports for advanced users |
 | No rate limiting on `/analyze` | Medium | Open | Add per-IP rate limiting for public deployments |
