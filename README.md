@@ -2,7 +2,18 @@
 
 A multi-criteria decision support system (MCDSS) for mapping crop suitability across Kenyan counties. Built for agricultural researchers, county governments, and NGOs who need spatially explicit suitability analysis without GIS expertise.
 
-Currently configured for **cotton** across **Kitui** and **Bungoma** counties, with an architecture designed to onboard any crop and any county from a single JSON config file.
+Supports **10 crops** (cotton, maize, coffee, beans, sorghum, cassava, sunflower, sugarcane, millet, tea) across all **47 Kenyan counties**. Any crop can be analysed over any county — geography and agronomy are configured independently, with no code changes. Biophysical data is fetched **on demand** from open sources the first time a county is analysed, so nothing needs to be downloaded by hand.
+
+## 🔗 Live demo & project links
+
+| | |
+|---|---|
+| **Live app** | https://James-Ngei.github.io/Suitability-Engine |
+| **Backend API** | https://suitability-engine.onrender.com ( [/docs](https://suitability-engine.onrender.com/docs) ) |
+| **Project board** | _Trello/Scrum board — link to be added_ |
+| **Demo video** | _15–20 min walkthrough — link to be added_ |
+
+> **Note on cold starts:** the backend runs on Render's free tier and spins down when idle. The first request after inactivity takes ~20–60s while the dyno wakes and the active county's layers load; subsequent requests are fast.
 
 ---
 
@@ -19,6 +30,7 @@ Currently configured for **cotton** across **Kitui** and **Bungoma** counties, w
 - [PDF Report Generation](#pdf-report-generation)
 - [Adding a New County](#adding-a-new-county)
 - [Configuration Reference](#configuration-reference)
+- [Testing](#testing)
 - [Deployment](#deployment)
 - [Data Sources](#data-sources)
 - [Contributing](#contributing)
@@ -36,15 +48,17 @@ The engine combines five biophysical criteria — elevation, rainfall, temperatu
 - Interactive weight adjustment with instant re-analysis
 - County boundary clipping and spatial alignment
 - REST API serving analysis results as GeoTIFF and map-ready PNG tiles
-- PDF report generation (summary or full) with LLM-generated narrative
+- PDF report generation (summary or full) with RAG-grounded LLM narrative
 - Sensitivity analysis to identify which criteria drive results most
-- S3-backed data storage for cloud deployment on Render
+- On-demand data fetch (Planetary Computer / NASA POWER / OpenStreetMap) with a Cloudflare R2 cache for fast cloud cold starts
 
-**Analysis pipeline:**
+**End-to-end pipeline:**
 
 ```
-Raw rasters → Preprocess → Realign → Normalize → Clip → API → Dashboard
+Fetch (PC/NASA/OSM) → Preprocess → Realign → Normalize → Clip → API → Dashboard
 ```
+
+The fetch + pipeline runs automatically the first time a county is requested; prepared layers are then cached to R2 so future runs skip straight to serving.
 
 ---
 
@@ -55,11 +69,13 @@ Raw rasters → Preprocess → Realign → Normalize → Clip → API → Dashbo
 | Frontend | React 18, Leaflet / react-leaflet, Axios |
 | Backend API | FastAPI, Uvicorn |
 | Geospatial | Rasterio, GeoPandas, NumPy, Shapely |
+| Data sources | Microsoft Planetary Computer (COP-DEM GLO-30), NASA POWER (climate), OpenStreetMap (boundaries), fetched on demand |
 | Visualization | Pillow (PNG tiles), Matplotlib, matplotlib-scalebar |
-| Report Generation | ReportLab (PDF), LLM narrative (Groq / Gemini / Anthropic / Ollama) |
-| Storage | AWS S3 (raster data), local filesystem (results) |
-| Config | JSON per county, plain-text active county pointer |
-| Deployment | Render (API), S3 (data), static site or local (frontend) |
+| Report Generation | ReportLab (PDF), RAG (ChromaDB → TF-IDF fallback), LLM narrative (Groq / Gemini / Anthropic / Ollama) |
+| Storage | Cloudflare R2 (S3-compatible layer cache), local filesystem (results) |
+| Config | Split JSON — `config/counties/` (geography) + `config/crops/` (agronomy) |
+| Deployment | Render (API), Cloudflare R2 (data cache), GitHub Pages (frontend) |
+| Testing / CI | pytest, GitHub Actions |
 
 ---
 
@@ -69,12 +85,18 @@ Raw rasters → Preprocess → Realign → Normalize → Clip → API → Dashbo
 suitability-engine/
 │
 ├── config/
-│   ├── active_county.txt        # Set this to switch counties
-│   ├── kitui.json               # Kitui county config
-│   └── bungoma.json             # Bungoma county config
+│   ├── counties/                # 47 county configs — geography only
+│   │   ├── kitui.json
+│   │   ├── bungoma.json
+│   │   └── … (45 more)
+│   └── crops/                   # 10 crop configs — agronomy (weights + thresholds)
+│       ├── cotton.json
+│       ├── maize.json
+│       └── … (8 more)
 │
 ├── src/
-│   ├── config.py                # Config loader — all scripts import from here
+│   ├── config.py                # Loads + merges county × crop config; all scripts import from here
+│   ├── pc_fetcher.py            # On-demand fetch: Planetary Computer + NASA POWER + OSM
 │   ├── preprocess.py            # Reproject, clip raw rasters to boundary
 │   ├── realign_to_boundary.py   # Snap all rasters to a shared pixel grid
 │   ├── normalize.py             # Apply fuzzy membership functions (0–100)
@@ -82,63 +104,70 @@ suitability-engine/
 │   ├── suitability.py           # Weighted overlay engine + statistics
 │   ├── sensitivity_analysis.py  # One-at-a-time weight sensitivity tests
 │   ├── map_renderer.py          # Static PNG map/chart rendering for reports
-│   ├── report_writer.py         # PDF report builder (ReportLab + LLM)
+│   ├── report_writer.py         # PDF report builder (ReportLab + RAG + LLM)
+│   ├── upload_to_r2.py          # Mirror prepared layers to Cloudflare R2
 │   └── api.py                   # FastAPI backend
 │
 ├── frontend/
 │   ├── public/
 │   │   └── index.html
 │   └── src/
-│       ├── App.js               # Root component, 3-column layout
+│       ├── App.js               # Root component + all app state
 │       ├── App.css              # All styles
+│       ├── hooks/
+│       │   └── useSmoothedProgress.js
 │       └── components/
-│           ├── MapView.js       # Leaflet map + overlay + legend
-│           ├── WeightControls.js # Criterion weight sliders
-│           ├── Statistics.js    # Score cards + classification bars
-│           └── ReportPanel.js   # PDF report controls (depth, generate, view)
+│           ├── AnalysisSetup.js    # County + crop pickers + run button
+│           ├── CountySelector.js   # County dropdown with load status
+│           ├── CropSelector.js     # Crop dropdown
+│           ├── FetchProgressBar.js # Live fetch/pipeline progress
+│           ├── MapView.js          # Leaflet map + overlay + legend
+│           ├── WeightControls.js   # Criterion weight sliders
+│           ├── Statistics.js       # Score cards + classification bars
+│           └── ReportPanel.js      # PDF report controls (depth, generate, view)
 │
 ├── data/                        # Created at runtime — not committed
-│   ├── counties/
-│   │   └── kitui/
-│   │       ├── boundaries/      # County boundary (.gpkg)
-│   │       ├── raw/             # Downloaded rasters
-│   │       ├── preprocessed/    # Clipped & reprojected
-│   │       ├── processed/       # Aligned to shared grid
-│   │       ├── normalized/      # 0–100 fuzzy scores
-│   │       ├── results/         # CLI analysis outputs
-│   │       ├── sensitivity/     # Sensitivity analysis outputs
-│   │       └── api_results/     # Per-request GeoTIFFs, PNGs, PDFs, metadata
+│   ├── counties/<county>/       # One dir per fetched county
+│   │   ├── boundaries/          # County boundary (.gpkg, from OSM)
+│   │   ├── raw/                 # Fetched rasters
+│   │   ├── preprocessed/        # Clipped & reprojected
+│   │   ├── processed/           # Aligned to shared grid
+│   │   ├── normalized/          # 0–100 fuzzy scores
+│   │   ├── results/<crop>/      # CLI analysis outputs
+│   │   ├── sensitivity/<crop>/  # Sensitivity analysis outputs
+│   │   └── api_results/<crop>/  # Per-request GeoTIFFs, PNGs, PDFs, metadata
+│   ├── rag_docs/                # Agronomic docs for RAG (committed)
 │   └── shared/
 │       └── protected_areas_kenya.gpkg
 │
+├── tests/                       # pytest suite (see Testing)
+├── .github/workflows/ci.yml     # GitHub Actions — runs tests on push/PR
 ├── deploy_check.py              # Pre-deploy validation script
 ├── render.yaml                  # Render deployment config
 ├── requirements.txt
 └── README.md
 ```
 
-> **Note:** the `data/` directory is excluded from version control via `.gitignore`. All raster inputs must be sourced and placed locally — see [Data Requirements](#data-requirements).
+> **Note:** the `data/` directory (except `data/rag_docs/`) is excluded from version control. Raster inputs are fetched automatically at runtime — see [Data Requirements](#data-requirements).
 
 ---
 
 ## Data Requirements
 
-Each county needs five raster layers (GeoTIFF format) placed in `data/counties/<county>/raw/`:
+**No manual data download is required.** The first time a county is analysed, `pc_fetcher.py` fetches everything it needs and caches it under `data/counties/<county>/`:
 
-| File | Description | Recommended Source |
+| Layer | Description | Source (fetched automatically) |
 |---|---|---|
-| `<county>_elevation.tif` | Digital Elevation Model (metres) | SRTM 30m via [OpenTopography](https://opentopography.org) |
-| `<county>_rainfall.tif` | Mean annual rainfall (mm/year) | [CHIRPS](https://www.chc.ucsb.edu/data/chirps) |
-| `<county>_temperature.tif` | Mean annual temperature (°C) | [WorldClim v2](https://www.worldclim.org/data/worldclim21.html) |
-| `<county>_soil.tif` | Soil clay content (g/kg) | [SoilGrids 250m](https://soilgrids.org) |
-| `<county>_slope.tif` | Terrain slope (degrees) | Derived from DEM using GDAL or QGIS |
+| elevation | Digital Elevation Model (metres) | Copernicus DEM GLO-30 via [Planetary Computer](https://planetarycomputer.microsoft.com) |
+| slope | Terrain slope (degrees) | Derived from the DEM |
+| rainfall | Mean annual rainfall (mm/year) | [NASA POWER](https://power.larc.nasa.gov) (`PRECTOTCORR` × 365) |
+| temperature | Mean annual temperature (°C) | [NASA POWER](https://power.larc.nasa.gov) (`T2M`) |
+| soil | Soil clay content | [ISRIC SoilGrids](https://soilgrids.org) |
+| boundary | County boundary polygon | [OpenStreetMap](https://www.openstreetmap.org) |
 
-You also need:
-
-- **County boundary**: `data/counties/<county>/boundaries/<county>_boundary.gpkg` — Kenya county boundaries available from [GADM](https://gadm.org) or the [Kenya Open Data portal](https://opendata.go.ke).
 - **Protected areas** *(optional)*: `data/shared/protected_areas_kenya.gpkg` — download from [Protected Planet](https://www.protectedplanet.net). If absent, the constraint mask uses the county boundary only.
 
-Raw files can be named either `elevation.tif` or `kitui_elevation.tif` — the pipeline auto-detects both.
+You may still drop pre-sourced rasters into `data/counties/<county>/raw/` (named `elevation.tif` or `<county>_elevation.tif` — both are auto-detected); if present, the fetch step is skipped for those layers.
 
 ---
 
@@ -147,8 +176,8 @@ Raw files can be named either `elevation.tif` or `kitui_elevation.tif` — the p
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/suitability-engine.git
-cd suitability-engine
+git clone https://github.com/James-Ngei/Suitability-Engine.git
+cd Suitability-Engine
 ```
 
 ### 2. Python environment
@@ -167,19 +196,29 @@ npm install
 cd ..
 ```
 
-### 4. Set the active county
+### 4. (Optional) Choose the default county and crop
+
+The app defaults to the first county alphabetically (`baringo`) and `cotton`. Override the defaults with environment variables (or `config/active_county.txt` / `config/active_crop.txt`):
 
 ```bash
-echo "kitui" > config/active_county.txt
+export ACTIVE_COUNTY=kitui
+export ACTIVE_CROP=cotton
 ```
+
+At runtime you can also switch county/crop directly in the dashboard, or per request via the `?county=` / `?crop=` query parameters.
 
 ---
 
 ## Running the Pipeline
 
-Run these steps **once** after placing raw data for a county. Re-run only if source data or normalization thresholds change.
+**You normally don't need to run this manually** — the API fetches data and runs the pipeline automatically the first time a county is requested (or via `POST /admin/load-county`). Run it by hand only to prepare a county offline or to re-generate after changing thresholds.
 
 ```bash
+export ACTIVE_COUNTY=kitui         # county to prepare
+
+# Step 0 — Fetch raw layers (Planetary Computer / NASA POWER / OSM)
+python src/pc_fetcher.py --fetch
+
 # Step 1 — Reproject, clip, and build constraint mask
 python src/preprocess.py
 
@@ -228,30 +267,39 @@ npm start
 # → http://localhost:3000
 ```
 
-Open `http://localhost:3000`. The map will centre on the active county and load the boundary outline. Adjust the sliders and click **Run Analysis** to generate a suitability overlay.
+Open `http://localhost:3000`. The map centres on the active county and loads the boundary outline. Pick a county and crop, adjust the sliders, and click **Run Analysis** to generate a suitability overlay.
 
-### Switching counties
+### Switching counties / crops
 
-```bash
-echo "bungoma" > config/active_county.txt
-# Restart the API — frontend picks up the new config automatically
-python src/api.py
-```
+Use the **county and crop selectors** in the dashboard — the first time a county is selected, the API fetches and prepares its data in the background (progress is shown in the UI). No restart required. Programmatically, pass `?county=<name>&crop=<name>` to any data endpoint, or `POST /admin/load-county?county=<name>` to pre-warm a county.
 
 ---
 
 ## API Reference
 
-All endpoints are prefixed with `http://localhost:8000`.
+Base URL: `http://localhost:8000` locally, or `https://suitability-engine.onrender.com` in production.
+Data endpoints accept optional `?county=<name>&crop=<name>` query parameters to override the defaults per request.
+
+### `GET /ping`
+Lightweight liveness check (`{"status": "ok"}`) — used by the Render health check.
 
 ### `GET /`
-Returns a summary of all available endpoints.
+Returns the API version, loaded counties, and available counties.
 
 ### `GET /health`
-Returns API status, loaded layer count, raster bounds, and S3 bucket info.
+Overall status plus **per-county** load state (`idle` / `fetching` / `pipeline` / `loaded`) and layer counts.
+
+### `GET /status/{county}`
+Poll this to track fetch/pipeline progress for a single county.
+
+### `GET /counties`
+Lists all available counties with their current load status.
+
+### `GET /crops`
+Lists all available crops.
 
 ### `GET /county`
-Returns active county metadata for the frontend.
+Returns county + crop metadata for the frontend.
 
 ```json
 {
@@ -330,8 +378,11 @@ Returns the full metadata JSON for a previous analysis.
 ### `GET /download/{analysis_id}`
 Downloads the suitability GeoTIFF.
 
+### `POST /admin/load-county?county=<name>`
+Fetches (if needed), runs the pipeline, and loads a county into memory in the background. Poll `GET /status/{county}` for progress.
+
 ### `POST /admin/reload`
-Re-syncs from S3 and reloads normalized layers into memory without restarting.
+Re-syncs from R2 (or re-fetches) and reloads normalized layers into memory without restarting.
 
 ---
 
@@ -359,50 +410,56 @@ The narrative section is generated by an LLM. Provider is selected via the `LLM_
 
 If no provider is configured or all calls fail, the report falls back to a deterministic template — **the PDF never fails to build**.
 
-### RAG upgrade slot
+### RAG-grounded narrative
 
-`generate_narrative()` accepts a `rag_context` string. Pass retrieved methodology or agronomic context chunks to ground the LLM in domain-specific material. The rest of the pipeline is unchanged.
+At startup, `build_rag_store()` indexes any agronomic documents in `data/rag_docs/` (`.txt`, `.md`, or text-extractable `.pdf`) into a vector store — ChromaDB if available, otherwise a lightweight TF-IDF fallback. When a report is generated, the most relevant passages are retrieved and injected into the narrative prompt, grounding the LLM's recommendations in source literature (e.g. FAO crop guides). If `data/rag_docs/` is empty, RAG is silently disabled and the narrative is produced from the analysis statistics alone.
 
 ---
 
 ## Adding a New County
 
-1. **Create a config file** at `config/<county>.json`. Copy an existing one as a template and update all fields (see [Configuration Reference](#configuration-reference)).
+For a **new county**, you usually only need step 1 — data is fetched automatically:
 
-2. **Place raw rasters** in `data/counties/<county>/raw/`
+1. **Create a county config** at `config/counties/<county>.json` (geography: boundary, map centre/zoom, bbox, resolution, layer filenames). Copy an existing one as a template.
 
-3. **Place the boundary** at `data/counties/<county>/boundaries/<county>_boundary.gpkg`
+2. Select the county in the dashboard (or `POST /admin/load-county?county=<county>`). The API fetches data, runs the pipeline, and loads it — no restart needed.
 
-4. **Set as active and run the pipeline:**
-   ```bash
-   echo "<county>" > config/active_county.txt
-   python src/preprocess.py
-   python src/realign_to_boundary.py
-   python src/normalize.py
-   python src/clip_to_boundary.py
-   ```
+For a **new crop**, add `config/crops/<crop>.json` (agronomy: `normalization` thresholds, `weights` summing to 1.0, `criteria_info`). It immediately becomes selectable over any county.
 
-5. **Restart the API** — the frontend updates automatically.
-
-No code changes are required. Everything is driven by the JSON config.
+No code changes are required — everything is driven by the split JSON configs.
 
 ---
 
 ## Configuration Reference
+
+Configuration is split into two files. A **county config** (`config/counties/<county>.json`) holds geography only:
 
 ```jsonc
 {
   "county": "kitui",            // Unique ID (lowercase, no spaces)
   "display_name": "Kitui County",
   "country": "Kenya",
-  "crop": "Cotton",
   "map_center": [-1.37, 38.01], // [lat, lng]
   "map_zoom": 9,
   "resolution": 0.005,          // Pixel size in degrees (~500m at equator)
+  "bbox": [37.0, -3.2, 39.0, -0.4],
 
-  "layers": {
-    "elevation": "kitui_elevation.tif"  // Filename in raw/ directory
-  },
+  "layers": {                   // Raster filenames (in raw/)
+    "elevation": "kitui_elevation.tif",
+    "rainfall": "kitui_rainfall.tif",
+    "temperature": "kitui_temperature.tif",
+    "soil": "kitui_soil.tif",
+    "slope": "kitui_slope.tif"
+  }
+}
+```
+
+A **crop config** (`config/crops/<crop>.json`) holds agronomy only — reused across all counties:
+
+```jsonc
+{
+  "crop_id": "cotton",
+  "display_name": "Cotton",
 
   "normalization": {
     "elevation": {
@@ -410,25 +467,16 @@ No code changes are required. Everything is driven by the JSON config.
       "params": { "a": 200, "b": 400, "c": 1000, "d": 1500 },
       "description": "ASAL lowland cotton 400–1000m optimal"
     },
-    "temperature": {
-      "type": "gaussian",
-      "params": { "optimal": 27, "spread": 5 }
-    },
-    "slope": {
-      "type": "linear_descending",
-      "params": { "min_val": 0, "max_val": 15 }
-    }
+    "temperature": { "type": "gaussian", "params": { "optimal": 27, "spread": 5 } },
+    "slope":       { "type": "linear_descending", "params": { "min_val": 0, "max_val": 15 } }
   },
 
-  "weights": {
-    "rainfall": 0.3             // Must sum to 1.0
+  "weights": {                  // Must sum to 1.0
+    "rainfall": 0.3, "elevation": 0.15, "temperature": 0.2, "soil": 0.2, "slope": 0.15
   },
 
   "criteria_info": {
-    "rainfall": {
-      "description": "Annual rainfall in mm/year",
-      "optimal_range": "600–900 mm"
-    }
+    "rainfall": { "description": "Annual rainfall in mm/year", "optimal_range": "600–900 mm" }
   }
 }
 ```
@@ -443,27 +491,51 @@ No code changes are required. Everything is driven by the JSON config.
 
 ---
 
+## Testing
+
+Automated tests live in `tests/` and run with **pytest**:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Coverage focuses on the deterministic core of the engine:
+
+| Area | What's covered |
+|---|---|
+| `normalize.py` | Fuzzy membership functions — plateaus, edges, symmetry, 0–100 clamping |
+| `suitability.py` | Weighted-overlay arithmetic, classification thresholds, statistics, empty-raster safety |
+| `config.py` | County/crop loading + merge; every crop's weights sum to 1.0 and use valid normalization types |
+| `api.py` | FastAPI metadata endpoints and `/analyze` request validation via `TestClient` (offline — no data fetch) |
+
+Every push and pull request runs the suite on Python 3.11 and 3.12 via **GitHub Actions** (`.github/workflows/ci.yml`).
+
+---
+
 ## Deployment
 
-The API is designed to deploy on [Render](https://render.com) with raster data stored in AWS S3. See `deployment.md` for the full step-by-step guide.
+The API deploys on [Render](https://render.com); the frontend deploys to GitHub Pages. Prepared layers are cached in **Cloudflare R2** (S3-compatible) for fast cold starts — but R2 is optional: without it, the API just fetches from the open data sources on first use. See `deployment.md` for the full guide.
 
-**Quick summary:**
+**Backend (Render):**
 
-1. Run `python deploy_check.py` — all checks must pass before pushing.
-2. Upload county data to S3 following the required folder structure.
-3. Push to GitHub — Render auto-deploys from `render.yaml`.
-4. Set `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` as secrets in the Render dashboard.
-5. Verify with `curl https://your-service.onrender.com/health`.
+1. Push to GitHub — Render auto-deploys from `render.yaml` (`uvicorn src.api:app`).
+2. Set these as secrets in the Render dashboard: `GROQ_API_KEY`, and (optional, for the R2 cache) `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`.
+3. Verify: `curl https://suitability-engine.onrender.com/ping`.
 
-**S3 bucket layout:**
+**Frontend (GitHub Pages):** set `REACT_APP_API_URL` in `frontend/.env` to the Render URL, then:
+
+```bash
+cd frontend && npm run deploy   # builds and pushes to the gh-pages branch
 ```
-suitability-engine/
-└── kitui/
+
+**R2 cache layout** (populated automatically after a county is first prepared):
+```
+<bucket>/
+└── kenya/<county>/
     ├── normalized/      normalized_*.tif
-    ├── boundary/        kitui_boundary.gpkg
-    ├── constraints/     protected_areas_kenya.gpkg
-    ├── preprocessed/    kitui_constraints_mask.tif
-    └── results/         ← written back after each analysis
+    ├── boundaries/      <county>_boundary.gpkg
+    └── preprocessed/    <county>_constraints_mask.tif
 ```
 
 To reload data without restarting: `POST /admin/reload`
@@ -474,11 +546,10 @@ To reload data without restarting: `POST /admin/reload`
 
 | Dataset | Source | License |
 |---|---|---|
-| SRTM Elevation | [OpenTopography](https://opentopography.org) | CC BY 4.0 |
-| CHIRPS Rainfall | [UCSB CHC](https://www.chc.ucsb.edu/data/chirps) | Public domain |
-| WorldClim Temperature | [WorldClim](https://www.worldclim.org) | CC BY 4.0 |
+| Copernicus DEM GLO-30 (elevation) | [Microsoft Planetary Computer](https://planetarycomputer.microsoft.com) | ESA / free & open |
+| Rainfall & Temperature | [NASA POWER](https://power.larc.nasa.gov) | Free & open |
 | SoilGrids Clay Content | [ISRIC](https://soilgrids.org) | CC BY 4.0 |
-| Kenya County Boundaries | [GADM](https://gadm.org) | Academic use |
+| County Boundaries | [OpenStreetMap](https://www.openstreetmap.org) | ODbL |
 | Protected Areas | [Protected Planet](https://www.protectedplanet.net) | See terms |
 
 ---
@@ -487,13 +558,12 @@ To reload data without restarting: `POST /admin/reload`
 
 Contributions are welcome. Useful areas to extend:
 
-- Additional crop configs (maize, sorghum, cassava, sunflower)
 - More county or cross-border region configs
+- Additional crop configs beyond the current 10
 - Alternative normalization functions (sigmoid, piecewise linear)
-- RAG integration for LLM narrative (connect agronomic knowledge base)
-- Multi-crop comparison view in the dashboard
-- Export to PDF report from the frontend without API round-trip
+- Multi-crop comparison view in the dashboard (compare two crops side by side)
 - Time-series analysis using multiple rainfall/temperature rasters
+- API authentication for the `/admin/*` endpoints
 
 Please open an issue before submitting a pull request for significant changes.
 

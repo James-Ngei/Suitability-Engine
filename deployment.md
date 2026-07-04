@@ -3,37 +3,45 @@
 ## Overview
 
 ```
-GitHub repo  →  Render (API)  ←  S3 (raster data)
-                    ↑
+GitHub repo ──► Render (FastAPI)  ◄── Cloudflare R2 (prepared-layer cache, optional)
+                     ▲   │
+                     │   └──► Open data sources (Planetary Computer / NASA POWER / OSM)
+                     │             (on-demand fetch, first time a county is used)
               React frontend
-              (Render static site or local)
+              (GitHub Pages)
 ```
 
-The API is **stateless between requests** — all rasters are loaded into memory
-at startup from S3. No database required.
+The API loads county layers into memory **per county**. Startup returns
+immediately (so Render's health check passes at once); the active county's
+data is prepared in the background. There is no database.
+
+**Two data paths:**
+- **Fast path** — if a county's prepared layers already exist in Cloudflare R2, they are synced down in seconds.
+- **Cold path** — the first time a county is ever requested, raw data is fetched from the open sources, run through the pipeline, and then uploaded to R2 so every future start uses the fast path.
+
+R2 is **optional**: without R2 credentials the API simply fetches from the open
+sources on first use (slower cold start, but fully functional).
 
 ---
 
-## Step 1 — Verify your file structure
-
-Your repo must look like this before pushing:
+## Step 1 — Verify your repo structure
 
 ```
 suitability-engine/
 ├── config/
-│   ├── active_county.txt      ← "kitui"
-│   ├── kitui.json
-│   └── bungoma.json
+│   ├── counties/                ← 47 county configs (geography)
+│   └── crops/                   ← 10 crop configs (agronomy)
 ├── src/
-│   ├── api.py                 ← updated (S3 sync)
-│   ├── config.py              ← updated (__file__-relative CONFIG_DIR)
-│   └── ... (other scripts)
-├── frontend/
-│   └── ...
-├── render.yaml                ← updated (src.api:app)
-├── requirements.txt           ← updated (pydantic, uvicorn[standard])
-├── deploy_check.py            ← run this before every deploy
-└── .gitignore                 ← data/ and *.tif excluded
+│   ├── api.py                   ← FastAPI app (R2 sync + PC fetch)
+│   ├── config.py                ← __file__-relative CONFIG_DIR, county × crop merge
+│   ├── pc_fetcher.py            ← on-demand data fetch
+│   ├── upload_to_r2.py          ← mirror prepared layers to R2
+│   └── ... (pipeline scripts)
+├── frontend/                    ← React app (deployed to GitHub Pages)
+├── render.yaml                  ← Render config (src.api:app, /ping health check)
+├── requirements.txt
+├── deploy_check.py              ← run this before every deploy
+└── .gitignore                   ← data/ and *.tif excluded
 ```
 
 Run the pre-deploy check:
@@ -44,31 +52,35 @@ All checks must be ✅ before continuing.
 
 ---
 
-## Step 2 — Verify your S3 structure
+## Step 2 — (Optional) Prepare the Cloudflare R2 cache
 
-Your bucket (`suitability-engine`) must have this layout for each county:
+R2 gives fast cold starts by caching prepared layers. Skip this step to run
+purely on on-demand fetch.
 
+1. Create an R2 bucket (e.g. `suitability-engine`) in the Cloudflare dashboard.
+2. Create an R2 API token with **Object Read & Write** on that bucket; note the
+   **Account ID**, **Access Key ID**, and **Secret Access Key**.
+3. Prepare and upload one or more counties from your machine:
+   ```bash
+   export ACTIVE_COUNTY=kitui
+   python src/pc_fetcher.py --fetch        # fetch raw layers
+   python src/preprocess.py
+   python src/realign_to_boundary.py
+   python src/normalize.py
+   python src/clip_to_boundary.py
+   python src/upload_to_r2.py --county kitui
+   ```
+
+The API also uploads to R2 automatically after preparing any county at runtime,
+so this manual step only front-loads the work.
+
+**R2 layout** (created automatically):
 ```
-suitability-engine/
-└── kitui/
-    ├── normalized/
-    │   ├── normalized_elevation.tif
-    │   ├── normalized_rainfall.tif
-    │   ├── normalized_temperature.tif
-    │   ├── normalized_soil.tif
-    │   └── normalized_slope.tif
-    ├── boundary/
-    │   └── kitui_boundary.gpkg
-    ├── constraints/
-    │   └── protected_areas_kenya.gpkg
-    ├── preprocessed/
-    │   └── kitui_constraints_mask.tif
-    └── results/               ← written here by the API after each analysis
-```
-
-Verify from the AWS console or CLI:
-```bash
-aws s3 ls s3://suitability-engine/kitui/ --recursive
+<bucket>/
+└── kenya/<county>/
+    ├── normalized/       normalized_*.tif
+    ├── boundaries/       <county>_boundary.gpkg
+    └── preprocessed/     <county>_constraints_mask.tif
 ```
 
 ---
@@ -76,161 +88,136 @@ aws s3 ls s3://suitability-engine/kitui/ --recursive
 ## Step 3 — Push to GitHub
 
 ```bash
-git add src/api.py src/config.py render.yaml requirements.txt deploy_check.py
-git commit -m "feat: S3 sync, deployment fixes"
+git add -A
+git commit -m "deploy: <what changed>"
 git push origin main
 ```
 
-Make sure these are NOT committed (check .gitignore):
-- `data/` directory (rasters)
+Make sure these are NOT committed (check `.gitignore`):
+- `data/` directory (rasters) — except `data/rag_docs/`
 - `*.tif`, `*.gpkg`, `*.geojson` files
-- `venv/`
+- `venv/`, `node_modules/`, `frontend/build/`
 
 ---
 
-## Step 4 — Deploy on Render
+## Step 4 — Deploy the API on Render
 
 ### 4a. Create the Web Service
 
 1. Go to [render.com](https://render.com) → **New** → **Web Service**
 2. Connect your GitHub repo
-3. Render will auto-detect `render.yaml` — confirm the settings:
+3. Render auto-detects `render.yaml` — confirm the settings:
 
 | Setting | Value |
 |---|---|
 | Runtime | Python |
 | Build command | `pip install -r requirements.txt` |
 | Start command | `uvicorn src.api:app --host 0.0.0.0 --port $PORT` |
-| Health check path | `/health` |
+| Health check path | `/ping` |
 
 ### 4b. Set secret environment variables
 
 In the Render dashboard → **Environment** tab, add these manually
-(they are marked `sync: false` in render.yaml so they're never stored in git):
+(they are marked `sync: false` in `render.yaml`, so they are never stored in git):
 
 | Key | Value |
 |---|---|
-| `AWS_ACCESS_KEY_ID` | Your AWS key |
-| `AWS_SECRET_ACCESS_KEY` | Your AWS secret |
+| `GROQ_API_KEY` | Your Groq API key (for the LLM narrative) |
+| `R2_ACCOUNT_ID` | Cloudflare account ID *(only if using R2)* |
+| `R2_ACCESS_KEY_ID` | R2 access key *(only if using R2)* |
+| `R2_SECRET_ACCESS_KEY` | R2 secret *(only if using R2)* |
 
-These are already set in render.yaml (non-secret):
+Already set in `render.yaml` (non-secret):
 
 | Key | Value |
 |---|---|
 | `SUITABILITY_DATA_DIR` | `/tmp/suitability-engine` |
-| `ACTIVE_COUNTY` | `kitui` |
-| `AWS_S3_BUCKET` | `suitability-engine` |
-| `AWS_DEFAULT_REGION` | `eu-north-1` |
+| `ACTIVE_COUNTY` | `baringo` |
+| `ACTIVE_CROP` | `cotton` |
+| `LLM_PROVIDER` | `groq` |
+| `R2_BUCKET` | `suitability-engine` |
 
-### 4c. Set your AWS IAM permissions
-
-The IAM user/role needs these S3 permissions on your bucket:
-
-```json
-{
-  "Effect": "Allow",
-  "Action": [
-    "s3:GetObject",
-    "s3:PutObject",
-    "s3:ListBucket"
-  ],
-  "Resource": [
-    "arn:aws:s3:::suitability-engine",
-    "arn:aws:s3:::suitability-engine/*"
-  ]
-}
-```
-
-`ListBucket` — needed for the paginator in sync
-`GetObject`  — download normalized layers
-`PutObject`  — upload results back to S3
+> Without the R2 keys the service still runs — it fetches from the open data
+> sources on first use instead of syncing from R2.
 
 ---
 
 ## Step 5 — Verify the deploy
 
-Once Render shows **Live**, check these URLs
-(replace `your-service.onrender.com` with your actual URL):
+Once Render shows **Live** (replace the URL with your service's URL):
 
 ```bash
-# 1. Health check — should show all 5 layers loaded
-curl https://your-service.onrender.com/health
+# 1. Liveness — responds instantly, even during startup
+curl https://suitability-engine.onrender.com/ping
+# → {"status": "ok"}
 
-# Expected:
-# {
-#   "status": "healthy",
-#   "layers_loaded": 5,
-#   "layers_expected": 5,
-#   "boundary_available": true,
-#   "constraint_mask": true,
-#   ...
-# }
+# 2. Per-county health — the active county moves idle → fetching/pipeline → loaded
+curl https://suitability-engine.onrender.com/health
 
-# 2. County info
-curl https://your-service.onrender.com/county
+# 3. Poll a single county's preparation progress
+curl https://suitability-engine.onrender.com/status/baringo
 
-# 3. Run a test analysis
-curl -X POST https://your-service.onrender.com/analyze \
+# 4. Once a county reports "loaded", run a test analysis
+curl -X POST "https://suitability-engine.onrender.com/analyze?county=baringo&crop=cotton" \
   -H "Content-Type: application/json" \
   -d '{
-    "weights": {
-      "rainfall": 0.30,
-      "elevation": 0.15,
-      "temperature": 0.20,
-      "soil": 0.20,
-      "slope": 0.15
-    },
+    "weights": { "rainfall": 0.30, "elevation": 0.15,
+                 "temperature": 0.20, "soil": 0.20, "slope": 0.15 },
     "apply_constraints": true
   }'
 ```
 
-If `layers_loaded` is 0, check the Render logs — S3 credentials or bucket
-name are the most common cause.
+On a cold start with no R2 cache, the first county can take tens of seconds to a
+few minutes to fetch + prepare. Watch the Render logs — every fetch, sync, and
+pipeline step is logged.
 
 ---
 
-## Step 6 — Connect the frontend
+## Step 6 — Deploy the frontend (GitHub Pages)
 
-Update the API base URL in your React app:
-
-**`frontend/src/components/MapView.js`** and **`frontend/src/App.js`**:
-```js
-// Change this:
-const API_BASE_URL = 'http://localhost:8000';
-
-// To this:
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-```
-
-Then set `REACT_APP_API_URL=https://your-service.onrender.com` in your
-frontend's build environment (Render static site env vars, or `.env.production`).
+1. Point the frontend at your API in `frontend/.env`:
+   ```
+   REACT_APP_API_URL=https://suitability-engine.onrender.com
+   ```
+2. Build and publish to the `gh-pages` branch:
+   ```bash
+   cd frontend
+   npm install
+   npm run deploy        # gh-pages -d build
+   ```
+3. In the GitHub repo → **Settings → Pages**, confirm the source is the
+   `gh-pages` branch. The app is served at the `homepage` URL in
+   `frontend/package.json` (e.g. `https://James-Ngei.github.io/Suitability-Engine`).
 
 ---
 
 ## Ongoing operations
 
-### Switching counties
+### Switching the default county / crop
 
-Change `ACTIVE_COUNTY` in the Render dashboard env vars → redeploy.
-No code changes required.
+Change `ACTIVE_COUNTY` / `ACTIVE_CROP` in the Render env vars → redeploy. At
+runtime, users switch county/crop in the dashboard, or clients pass
+`?county=&crop=` per request — no redeploy needed.
 
-### Uploading new raster data
+### Preparing / refreshing a county
 
-1. Upload new TIFs to S3 following the folder structure above
-2. Hit the reload endpoint (no restart needed):
 ```bash
-curl -X POST https://your-service.onrender.com/admin/reload
+# Prepare an additional county on the running service (background):
+curl -X POST "https://suitability-engine.onrender.com/admin/load-county?county=bungoma"
+
+# Re-sync + reload the active county after updating its R2 data:
+curl -X POST "https://suitability-engine.onrender.com/admin/reload"
 ```
 
-### Cold start behaviour
+### Cold-start behaviour
 
-Render free/starter tier spins down after inactivity. On the next request:
-- S3 sync runs first (~10–30 seconds depending on file sizes)
-- Then layers load into memory
-- Health check passes and traffic is served
+Render's free/starter tier spins down after inactivity. On the next request:
+- `/ping` responds immediately; the county loads in the background
+- Fast path (R2 cache present): layers sync in seconds
+- Cold path (never prepared): full fetch + pipeline (tens of seconds to minutes), then cached to R2
 
-Use Render's **paid tier** or a **cron job pinging `/health`** every 10 minutes
-to keep the service warm if cold starts are a problem.
+Use Render's **paid tier** or a **cron job pinging `/ping`** every ~10 minutes to
+keep the service warm for demos.
 
 ---
 
@@ -238,9 +225,9 @@ to keep the service warm if cold starts are a problem.
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `layers_loaded: 0` | S3 credentials wrong or bucket name mismatch | Check env vars in Render dashboard |
-| `boundary_available: false` | `kitui/boundary/` folder empty or wrong filename | File must be `kitui_boundary.gpkg` |
-| `status: degraded` | Some layers missing | Check `/health` for which layers loaded |
-| 500 on `/analyze` | Constraint mask missing | Check `kitui/preprocessed/kitui_constraints_mask.tif` exists in S3 |
-| Frontend CORS error | API URL wrong in React | Set `REACT_APP_API_URL` env var |
-| Render deploy fails | Wrong start command | Must be `uvicorn src.api:app ...` not `uvicorn api:app ...` |
+| County stuck `fetching` / `error` in `/status` | Data source unreachable, or R2 keys wrong | Check Render logs; verify R2 creds or that PC/NASA/OSM are reachable |
+| `status: degraded` on `/health` | No county loaded yet | Normal right after cold start — wait for the active county to reach `loaded` |
+| `/analyze` returns 404/503 | County not loaded yet | Poll `/status/{county}`; `POST /admin/load-county?county=<name>` to prepare it |
+| Frontend CORS / no data | `REACT_APP_API_URL` wrong or empty | Set it in `frontend/.env` and re-run `npm run deploy` |
+| Render deploy fails | Wrong start command | Must be `uvicorn src.api:app ...`, not `uvicorn api:app ...` |
+| Narrative is the fallback template | No `GROQ_API_KEY` (or all LLM providers failing) | Set `GROQ_API_KEY` in Render env vars |
