@@ -17,6 +17,11 @@ services:
         value: baringo
       - key: ACTIVE_CROP
         value: cotton
+      # Crops shown in the UI. Only cotton is fully calibrated for now;
+      # multi-crop normalization is future work. Set to "all" or a comma list
+      # (e.g. cotton,maize) to expose more once they are calibrated.
+      - key: ENABLED_CROPS
+        value: cotton
       - key: LLM_PROVIDER
         value: groq
       - key: GROQ_API_KEY

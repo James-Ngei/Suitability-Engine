@@ -2,7 +2,9 @@
 
 A multi-criteria decision support system (MCDSS) for mapping crop suitability across Kenyan counties. Built for agricultural researchers, county governments, and NGOs who need spatially explicit suitability analysis without GIS expertise.
 
-Supports **10 crops** (cotton, maize, coffee, beans, sorghum, cassava, sunflower, sugarcane, millet, tea) across all **47 Kenyan counties**. Any crop can be analysed over any county — geography and agronomy are configured independently, with no code changes. Biophysical data is fetched **on demand** from open sources the first time a county is analysed, so nothing needs to be downloaded by hand.
+Covers all **47 Kenyan counties**. Geography and agronomy are configured independently (a county × crop model), so biophysical data is fetched **on demand** from open sources the first time a county is analysed — nothing needs to be downloaded by hand.
+
+> **Crop scope:** **cotton** is fully calibrated and enabled in the app. Nine further crop configs (maize, coffee, beans, sorghum, cassava, sunflower, sugarcane, millet, tea) ship in `config/crops/`, but per-crop normalization is not yet county+crop keyed, so they are **hidden from the selector** for now — see [Multi-crop: future work](#multi-crop-future-work). Re-enable them via the `ENABLED_CROPS` env var once calibrated.
 
 ## 🔗 Live demo & project links
 
@@ -33,6 +35,7 @@ Supports **10 crops** (cotton, maize, coffee, beans, sorghum, cassava, sunflower
 - [Testing](#testing)
 - [Deployment](#deployment)
 - [Data Sources](#data-sources)
+- [Multi-crop: future work](#multi-crop-future-work)
 - [Contributing](#contributing)
 
 ---
@@ -551,6 +554,20 @@ To reload data without restarting: `POST /admin/reload`
 | SoilGrids Clay Content | [ISRIC](https://soilgrids.org) | CC BY 4.0 |
 | County Boundaries | [OpenStreetMap](https://www.openstreetmap.org) | ODbL |
 | Protected Areas | [Protected Planet](https://www.protectedplanet.net) | See terms |
+
+---
+
+## Multi-crop: future work
+
+The system is architected around a **county × crop** model — county geography and crop agronomy live in separate configs, and any crop *can* in principle be analysed over any county. **Cotton is fully calibrated and is the only crop enabled in the deployed app.**
+
+The remaining nine crop configs are intentionally hidden from the selector because normalized rasters are currently cached per **county**, not per **county + crop**: the preprocessing pipeline normalizes each county's layers with the default crop's (cotton's) fuzzy thresholds, so selecting another crop would reuse cotton's normalization with only the weights swapped — agronomically incorrect. Enabling them correctly requires:
+
+- Keying normalized layers (and the R2 cache prefix) by county + crop
+- Passing the selected crop into the preprocessing pipeline (`_run_pipeline`)
+- Keying the in-memory `COUNTY_CACHE` by (county, crop)
+
+Until then, `GET /crops` returns only the crops listed in the `ENABLED_CROPS` env var (default `cotton`; set to `all` or a comma-separated list to expose more). This keeps the deployed app correct and demonstrable while leaving the multi-crop groundwork in place.
 
 ---
 

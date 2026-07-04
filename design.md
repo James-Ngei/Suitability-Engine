@@ -372,6 +372,7 @@ Because R2 is S3-compatible, the same code runs against AWS S3 or any S3-compati
 
 ### Current limitations
 
+- **Single enabled crop.** Normalized layers are cached per county, not per county + crop, and the pipeline normalizes with the default crop's thresholds. Only **cotton** is calibrated and enabled (`GET /crops` is filtered by the `ENABLED_CROPS` env var, default `cotton`); the other crop configs are hidden until normalization is keyed by county + crop. See README → *Multi-crop: future work*.
 - **Static weights per session.** The API processes each `/analyze` request independently with the weights provided. There is no server-side weight optimization or parameter search.
 - **Temporal averaging.** All raster inputs are long-term averages/climatologies. Seasonal variability in rainfall or temperature is not captured.
 - **No user authentication.** The API has no auth layer. `/admin/reload` and `/admin/load-county` are unprotected. For production use, these endpoints should be protected.

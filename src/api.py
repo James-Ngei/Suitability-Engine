@@ -594,11 +594,27 @@ async def list_all_counties():
 
 
 
+def _enabled_crops() -> list:
+    """
+    Crops exposed in the UI. Normalization is not yet keyed by county+crop
+    (see design.md §10 / evaluation.md §2.2 — multi-crop is future work), so
+    only cotton is fully calibrated and enabled. Re-enable more crops without
+    a code change via ENABLED_CROPS=cotton,maize (or ENABLED_CROPS=all).
+    """
+    raw = os.environ.get("ENABLED_CROPS", "cotton").strip().lower()
+    if raw in ("all", "*"):
+        return list_crops()
+    return [c.strip() for c in raw.split(",") if c.strip()]
+
+
 @app.get("/crops")
 async def list_all_crops():
-    """All available crop configs."""
+    """Enabled crop configs (see _enabled_crops)."""
+    enabled = _enabled_crops()
     result = []
     for crop_id in list_crops():
+        if crop_id not in enabled:
+            continue
         try:
             cfg = load_crop_config(crop_id)
             result.append({

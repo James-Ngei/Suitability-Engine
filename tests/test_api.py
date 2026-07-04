@@ -43,10 +43,13 @@ def test_list_counties_endpoint():
     assert any(c["county"] == "baringo" for c in r.json())
 
 
-def test_list_crops_endpoint():
+def test_list_crops_endpoint_defaults_to_cotton_only():
+    # Multi-crop normalization is future work, so only cotton is enabled by
+    # default (ENABLED_CROPS env var, default "cotton").
     r = client.get("/crops")
     assert r.status_code == 200
-    assert any(c["crop_id"] == "cotton" for c in r.json())
+    ids = [c["crop_id"] for c in r.json()]
+    assert ids == ["cotton"]
 
 
 def test_county_info_returns_weights_summing_to_one():
