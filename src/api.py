@@ -666,6 +666,62 @@ async def get_criteria(county: Optional[str] = Query(None), crop: Optional[str] 
     ]
 
 
+def _is_bbox_rectangle(gdf) -> bool:
+    """
+    True if the boundary is the degenerate bbox-rectangle fallback that
+    fetch_boundary() writes when OSM is unreachable — a single 4-corner
+    polygon identical to its own bounding box. Real county outlines never
+    equal their bounding box, so this reliably distinguishes the two.
+    """
+    try:
+        if gdf is None or len(gdf) != 1:
+            return False
+        geom = gdf.geometry.iloc[0]
+        if geom.geom_type != "Polygon":
+            return False
+        if len(geom.exterior.coords) > 5:
+            return False
+        from shapely.geometry import box
+        return geom.equals(box(*geom.bounds))
+    except Exception:
+        return False
+
+
+def _boundary_from_r2(county: str) -> bool:
+    """
+    Force-download JUST the boundary file for a county from R2, overwriting
+    any stale local copy (no mtime skip). Returns True if a file landed.
+    """
+    client = _r2_client()
+    if not client:
+        return False
+    try:
+        cfg = load_config(county)
+    except Exception:
+        return False
+    paths     = cfg["_paths"]
+    country   = cfg.get("country", "kenya").lower()
+    bucket    = _r2_bucket()
+    prefix    = f"{country}/{county}/boundaries/"
+    local_dir = Path(paths["boundary"].parent)
+    local_dir.mkdir(parents=True, exist_ok=True)
+    got = False
+    try:
+        paginator = client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get("Contents", []):
+                filename = obj["Key"].split("/")[-1]
+                if not filename:
+                    continue
+                local_path = local_dir / filename
+                logger.info(f"[{county}]   ↓ boundary {filename} ({obj['Size'] // 1024} KB)")
+                client.download_file(bucket, obj["Key"], str(local_path))
+                got = True
+    except Exception as e:
+        logger.warning(f"[{county}] R2 boundary pull failed: {type(e).__name__}: {e}")
+    return got
+
+
 @app.get("/boundary-geojson")
 async def get_boundary_geojson(county: Optional[str] = Query(None)):
     c    = _require_county(county)
@@ -674,17 +730,41 @@ async def get_boundary_geojson(county: Optional[str] = Query(None)):
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"No config for '{c}'")
     path = cfg["_paths"]["boundary"]
-    # Lazily fetch JUST the boundary (a cheap OSM call, independent of the full
-    # raster pipeline) so selecting any county shows its outline before an
-    # analysis is run. fetch_boundary falls back to a bbox rectangle if OSM is
-    # unreachable, so this almost always yields something.
-    if not path.exists():
+    loop = asyncio.get_event_loop()
+
+    # We need a real boundary if the file is missing OR only a degenerate bbox
+    # rectangle is cached (the OSM-unreachable fallback). The bbox is what got
+    # stuck on Render, so detecting it lets the endpoint self-heal.
+    need_fetch = not path.exists()
+    if path.exists():
         try:
-            from pc_fetcher import fetch_boundary
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, lambda: fetch_boundary(cfg))
-        except Exception as e:
-            logger.warning(f"[{c}] on-demand boundary fetch failed: {e}")
+            need_fetch = _is_bbox_rectangle(gpd.read_file(path))
+        except Exception:
+            need_fetch = True
+
+    if need_fetch:
+        # 1) Prefer the real polygon stored in R2 (force-overwrites a stale bbox).
+        if os.environ.get("R2_ACCOUNT_ID"):
+            try:
+                await loop.run_in_executor(None, lambda: _boundary_from_r2(c))
+            except Exception as e:
+                logger.warning(f"[{c}] R2 boundary pull failed: {e}")
+
+        # 2) If R2 gave us nothing / still only a bbox, lazily fetch from OSM.
+        #    fetch_boundary falls back to a bbox rectangle if OSM is unreachable.
+        still_bad = not path.exists()
+        if not still_bad:
+            try:
+                still_bad = _is_bbox_rectangle(gpd.read_file(path))
+            except Exception:
+                still_bad = True
+        if still_bad:
+            try:
+                from pc_fetcher import fetch_boundary
+                await loop.run_in_executor(None, lambda: fetch_boundary(cfg))
+            except Exception as e:
+                logger.warning(f"[{c}] on-demand boundary fetch failed: {e}")
+
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Boundary not found for '{c}'. Try POST /admin/load-county?county={c}")
     gdf = gpd.read_file(path)
