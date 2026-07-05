@@ -8,6 +8,7 @@ and NASA POWER. Also fetches county boundary from OSM if not present.
 
 import logging
 import math
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -50,6 +51,67 @@ def layer_is_cached(config: dict, name: str) -> bool:
 # Boundary — fetch from OSM using relation ID
 # ══════════════════════════════════════════════════════════════════════════════
 
+# Authoritative offline boundary source (GADM v4.1, Kenya ADM level 1 = counties).
+# Not committed (46 MB, gitignored) — present locally for seeding; production
+# reads the per-county polygons this produces via R2, not this file directly.
+_GADM_DEFAULT = Path(__file__).resolve().parent.parent / "gadm41_KEN.gpkg"
+
+
+def _gadm_county_key(name: str) -> str:
+    """Normalise a GADM NAME_1 to our county id: 'Elgeyo-Marakwet'→'elgeyo_marakwet',
+    "Murang'a"→'muranga', 'Tana River'→'tana_river'."""
+    return "_".join(name.lower().replace("'", "").replace("-", " ").split())
+
+
+def boundary_from_gadm(config: dict, gadm_path=None):
+    """
+    Extract this county's polygon from the local GADM level-1 gpkg. Returns a
+    single-row GeoDataFrame in EPSG:4326, or None if the file is absent or the
+    county name has no match. Offline and deterministic — no Overpass.
+    """
+    import geopandas as gpd
+    gadm_path = Path(gadm_path or os.environ.get("GADM_PATH", _GADM_DEFAULT))
+    county    = config["county"]
+    if not gadm_path.exists():
+        return None
+    try:
+        gdf = gpd.read_file(gadm_path, layer="ADM_ADM_1")
+    except Exception as e:
+        logger.warning(f"[{county}] GADM read failed: {e}")
+        return None
+    keys  = gdf["NAME_1"].map(_gadm_county_key)
+    match = gdf[keys == county]
+    if len(match) == 0:
+        logger.warning(f"[{county}] no GADM NAME_1 match — falling back to OSM")
+        return None
+    row = match.iloc[[0]].copy()
+    if str(row.crs) != "EPSG:4326":
+        row = row.to_crs("EPSG:4326")
+    return gpd.GeoDataFrame(
+        {"name": [f"{county.capitalize()} County"], "geometry": [row.geometry.iloc[0]]},
+        crs="EPSG:4326",
+    )
+
+
+def _is_bbox_rectangle(gdf) -> bool:
+    """
+    True if `gdf` is the degenerate 4-corner bbox rectangle this module writes
+    when OSM is unreachable — a single polygon equal to its own bounding box.
+    Real county outlines never equal their bounding box, so this reliably
+    distinguishes the fallback from a genuine boundary.
+    """
+    try:
+        import shapely.geometry as geom
+        if gdf is None or len(gdf) != 1:
+            return False
+        g = gdf.geometry.iloc[0]
+        if g.geom_type != "Polygon" or len(g.exterior.coords) > 5:
+            return False
+        return g.equals(geom.box(*g.bounds))
+    except Exception:
+        return False
+
+
 def fetch_boundary(config: dict) -> Path:
     import geopandas as gpd
     import shapely.geometry as geom
@@ -59,6 +121,14 @@ def fetch_boundary(config: dict) -> Path:
     county      = config["county"]
     output_path = paths["boundary"]
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 1) Prefer the authoritative local GADM file — offline, deterministic, no
+    #    Overpass rate limits. Falls through to OSM if the file/name is missing.
+    gadm = boundary_from_gadm(config)
+    if gadm is not None and len(gadm) > 0:
+        gadm.to_file(output_path, driver="GPKG")
+        logger.info(f"[{county}] Boundary from GADM: {output_path.name}")
+        return output_path
 
     relation_id = config.get("osm_relation_id")
 
@@ -88,6 +158,18 @@ def fetch_boundary(config: dict) -> Path:
                 gdf.to_file(output_path, driver="GPKG")
                 logger.info(f"[{county}] Boundary saved from OSM: {output_path.name}")
                 return output_path
+
+    # OSM fetch failed. Never overwrite an existing REAL polygon with a bbox —
+    # a transient Overpass outage must not degrade a county that was already
+    # good. Only write the bbox fallback when we have no real boundary yet.
+    if output_path.exists():
+        try:
+            existing = gpd.read_file(output_path)
+            if not _is_bbox_rectangle(existing):
+                logger.warning(f"[{county}] OSM fetch failed — keeping existing real boundary")
+                return output_path
+        except Exception:
+            pass
 
     logger.warning(f"[{county}] OSM boundary fetch failed — using bbox rectangle")
     west, south, east, north = _bbox_from_config(config)
