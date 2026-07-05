@@ -2,8 +2,8 @@
 Unit tests for the config loading / merging layer in `config.py`.
 
 These run purely against the JSON files committed under `config/` and need no
-raster data, so they exercise the county/crop split described in design.md §7
-(Configuration System) and guard the invariants the pipeline relies on:
+raster data, so they exercise the county/crop split described in
+DESIGN_AND_TESTING.md Part I §7 (Configuration System) and guard the invariants the pipeline relies on:
 weights sum to 1.0 and every declared criterion has a valid normalization type.
 """
 
