@@ -674,6 +674,17 @@ async def get_boundary_geojson(county: Optional[str] = Query(None)):
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"No config for '{c}'")
     path = cfg["_paths"]["boundary"]
+    # Lazily fetch JUST the boundary (a cheap OSM call, independent of the full
+    # raster pipeline) so selecting any county shows its outline before an
+    # analysis is run. fetch_boundary falls back to a bbox rectangle if OSM is
+    # unreachable, so this almost always yields something.
+    if not path.exists():
+        try:
+            from pc_fetcher import fetch_boundary
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: fetch_boundary(cfg))
+        except Exception as e:
+            logger.warning(f"[{c}] on-demand boundary fetch failed: {e}")
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Boundary not found for '{c}'. Try POST /admin/load-county?county={c}")
     gdf = gpd.read_file(path)
