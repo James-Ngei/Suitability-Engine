@@ -301,7 +301,7 @@ elasticity = (suitability_range / mid_suitability) / weight_range
 
 ## 8. Deployment Readiness
 
-The `deploy_check.py` script runs automated checks across eight categories. All checks should pass before deploying (verified passing on the current tree).
+The `deploy_check.py` script runs automated checks across eight categories. All checks should pass before deploying (verified passing on the current tree). It runs in two places: locally before a manual deploy, and automatically in CI — the **Deployment readiness** job in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs `python deploy_check.py` on every push and pull request, so a regression in `render.yaml`, a config JSON, or the R2/fetch wiring fails the build before it can reach Render.
 
 ### Check categories and common failures
 

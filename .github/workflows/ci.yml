@@ -41,3 +41,21 @@ jobs:
 
       - name: Run test suite
         run: pytest -q
+
+  deploy-check:
+    name: Deployment readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # deploy_check.py uses only the standard library — no install needed.
+      # It validates render.yaml, requirements, config JSON, path logic and
+      # R2/fetch coverage, exiting non-zero on any error.
+      - name: Run pre-deploy readiness check
+        run: python deploy_check.py

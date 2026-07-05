@@ -12,7 +12,8 @@ Covers all **47 Kenyan counties**. Geography and agronomy are configured indepen
 |---|---|
 | **Live app** | https://James-Ngei.github.io/Suitability-Engine |
 | **Backend API** | https://suitability-engine.onrender.com ( [/docs](https://suitability-engine.onrender.com/docs) ) |
-| **Project board** | _Trello/Scrum board — link to be added_ |
+| **Project board** | https://trello.com/b/3HnieYVN/crop-suitability-engine |
+| **Design & testing doc** | [design.md](design.md) (architecture, patterns, deployment & cost) · [evaluation.md](evaluation.md) (testing & validation) |
 | **Demo video** | _15–20 min walkthrough — link to be added_ |
 
 > **Note on cold starts:** the backend runs on Render's free tier and spins down when idle. The first request after inactivity takes ~20–60s while the dyno wakes and the active county's layers load; subsequent requests are fast.
@@ -512,7 +513,7 @@ Coverage focuses on the deterministic core of the engine:
 | `config.py` | County/crop loading + merge; every crop's weights sum to 1.0 and use valid normalization types |
 | `api.py` | FastAPI metadata endpoints and `/analyze` request validation via `TestClient` (offline — no data fetch) |
 
-Every push and pull request runs the suite on Python 3.11 and 3.12 via **GitHub Actions** (`.github/workflows/ci.yml`).
+Every push and pull request runs two jobs via **GitHub Actions** (`.github/workflows/ci.yml`): the pytest suite on Python 3.11 and 3.12, and a **Deployment readiness** job that runs `deploy_check.py` to validate `render.yaml`, the config JSON, and the R2/fetch wiring before anything can reach production.
 
 ---
 

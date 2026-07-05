@@ -48,7 +48,9 @@ Run the pre-deploy check:
 ```bash
 python deploy_check.py
 ```
-All checks must be ✅ before continuing.
+All checks must be ✅ before continuing. This same check also runs automatically
+in CI (the **Deployment readiness** job in `.github/workflows/ci.yml`) on every
+push and pull request, so `main` is always known to be deploy-ready.
 
 ---
 

@@ -30,6 +30,10 @@ data/
 ouputs/
 extract_boundaries.py
 
+# ── Local-only task tracking (never commit) ─────────────────────────────
+taskboard.csv
+taskboard.md
+
 # ── Windows "mark of the web" artifacts ─────────────────────────────────
 # Match any separator before the suffix: these files use a Unicode colon
 # (U+F03A), not an ASCII ':', so an explicit ':Zone.Identifier' never matched.
