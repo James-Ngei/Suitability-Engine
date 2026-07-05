@@ -13,7 +13,7 @@ Covers all **47 Kenyan counties**. Geography and agronomy are configured indepen
 | **Live app** | https://James-Ngei.github.io/Suitability-Engine |
 | **Backend API** | https://suitability-engine.onrender.com ( [/docs](https://suitability-engine.onrender.com/docs) ) |
 | **Project board** | https://trello.com/b/3HnieYVN/crop-suitability-engine |
-| **Design & testing doc** | [design.md](design.md) (architecture, patterns, deployment & cost) · [evaluation.md](evaluation.md) (testing & validation) |
+| **Design & testing doc** | [DESIGN_AND_TESTING.md](DESIGN_AND_TESTING.md) — Part I: architecture, patterns, deployment & cost · Part II: testing & validation |
 | **Demo video** | _15–20 min walkthrough — link to be added_ |
 
 > **Note on cold starts:** the backend runs on Render's free tier and spins down when idle. The first request after inactivity takes ~20–60s while the dyno wakes and the active county's layers load; subsequent requests are fast.

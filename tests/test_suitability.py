@@ -4,7 +4,7 @@ Unit tests for the weighted-overlay engine in `suitability.py`.
 The engine reads and writes GeoTIFFs, so each test writes small in-memory
 rasters to a temp directory using rasterio, runs the operation, and reads the
 result back. The weighted-overlay arithmetic case mirrors the worked example
-in evaluation.md §3.4.
+in DESIGN_AND_TESTING.md Part II §3.4.
 """
 
 import numpy as np
@@ -36,7 +36,7 @@ def _write_raster(path, array, nodata=0):
 # ── Weighted overlay arithmetic ────────────────────────────────────────────────
 
 def test_weighted_overlay_equal_weights(tmp_path):
-    # evaluation.md §3.4: layer_a=80, layer_b=60, weights 0.5/0.5 → 70 everywhere.
+    # DESIGN_AND_TESTING.md Part II §3.4: layer_a=80, layer_b=60, weights 0.5/0.5 → 70 everywhere.
     a = _write_raster(tmp_path / "a.tif", np.full((5, 5), 80.0))
     b = _write_raster(tmp_path / "b.tif", np.full((5, 5), 60.0))
 

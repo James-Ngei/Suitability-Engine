@@ -597,7 +597,7 @@ async def list_all_counties():
 def _enabled_crops() -> list:
     """
     Crops exposed in the UI. Normalization is not yet keyed by county+crop
-    (see design.md §10 / evaluation.md §2.2 — multi-crop is future work), so
+    (see DESIGN_AND_TESTING.md Part I §10 / Part II §2.2 — multi-crop is future work), so
     only cotton is fully calibrated and enabled. Re-enable more crops without
     a code change via ENABLED_CROPS=cotton,maize (or ENABLED_CROPS=all).
     """

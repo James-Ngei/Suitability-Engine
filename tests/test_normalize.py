@@ -4,7 +4,7 @@ Unit tests for the fuzzy membership functions in `normalize.py`.
 These are the mathematical core of the suitability engine: every raw raster
 value is passed through one of these functions to produce a 0-100 score.
 The expected values below are derived by hand from the piecewise definitions
-documented in design.md §3 (Data Pipeline).
+documented in DESIGN_AND_TESTING.md Part I §3 (Data Pipeline).
 """
 
 import numpy as np
